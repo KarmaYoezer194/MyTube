@@ -210,6 +210,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
           channelId: 'user-${author.uid}',
           channelName: author.displayName,
           channelAvatarUrl: author.avatarUrl,
+          channelAvatarColor: author.avatarColor,
           subscriberCount: 0,
           views: 0,
           likes: 0,

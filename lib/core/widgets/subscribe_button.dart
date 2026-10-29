@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../data/models/channel.dart';
 import '../../data/repositories/user_repository.dart';
 import '../../features/auth/require_account.dart';
 import '../theme/app_colors.dart';
@@ -13,22 +14,31 @@ import '../theme/app_colors.dart';
 /// whether to unsubscribe. The change between the two is animated (color,
 /// width and content).
 ///
-/// Saved in Firestore at users/{uid}/subscribed/{channelId}.
+/// Saved in Firestore at users/{uid}/subscribed/{channelId}, together with
+/// the channel's subscriber count. Hidden on your own channel.
 class SubscribeButton extends ConsumerWidget {
   const SubscribeButton({
     super.key,
     required this.channelId,
     required this.channelName,
+    this.fullWidth = false,
   });
 
   final String channelId;
   final String channelName;
+
+  /// Fill the whole width (the big pill on a channel page).
+  final bool fullWidth;
 
   static const _duration = Duration(milliseconds: 250);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
+    final isMine =
+        ref.watch(isSignedInProvider) &&
+        channelId == Channel.idForUser(ref.watch(currentUidProvider));
+    if (isMine || channelId.isEmpty) return const SizedBox.shrink();
     final subscribed =
         ref.watch(isSubscribedProvider(channelId)).value ?? false;
     final repository = ref.read(userRepositoryProvider);
@@ -74,6 +84,7 @@ class SubscribeButton extends ConsumerWidget {
       duration: _duration,
       curve: Curves.easeOut,
       height: 36,
+      width: fullWidth ? double.infinity : null,
       decoration: BoxDecoration(
         color: subscribed ? colors.surface : colors.chipSelectedBackground,
         borderRadius: BorderRadius.circular(18),
@@ -101,6 +112,7 @@ class SubscribeButton extends ConsumerWidget {
             child: AnimatedSize(
               duration: _duration,
               curve: Curves.easeOut,
+              alignment: Alignment.center,
               child: AnimatedSwitcher(
                 duration: _duration,
                 transitionBuilder: (child, animation) => FadeTransition(
@@ -113,7 +125,10 @@ class SubscribeButton extends ConsumerWidget {
                 child: subscribed
                     ? Row(
                         key: const ValueKey('subscribed'),
-                        mainAxisSize: MainAxisSize.min,
+                        mainAxisSize: fullWidth
+                            ? MainAxisSize.max
+                            : MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
                             Symbols.notifications,
@@ -139,7 +154,7 @@ class SubscribeButton extends ConsumerWidget {
                       )
                     : Center(
                         key: const ValueKey('subscribe'),
-                        widthFactor: 1,
+                        widthFactor: fullWidth ? null : 1,
                         child: Text(
                           'Subscribe',
                           style: TextStyle(

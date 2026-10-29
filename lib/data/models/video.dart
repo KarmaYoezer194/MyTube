@@ -25,6 +25,7 @@ class Video {
     required this.uploaderUid,
     required this.createdAt,
     this.visibility = 'public',
+    this.channelAvatarColor,
   });
 
   final String id;
@@ -42,6 +43,10 @@ class Video {
 
   /// Empty string means "no picture": we show a colored letter avatar.
   final String channelAvatarUrl;
+
+  /// The channel's letter-avatar color (a number like 0xFFD81B60).
+  /// null on older videos: the color then comes from the channel name.
+  final int? channelAvatarColor;
 
   final int subscriberCount;
   final int views;
@@ -96,6 +101,7 @@ class Video {
       uploaderUid: data['uploaderUid'] as String? ?? '',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       visibility: data['visibility'] as String? ?? 'public',
+      channelAvatarColor: (data['channelAvatarColor'] as num?)?.toInt(),
     );
   }
 
@@ -119,6 +125,7 @@ class Video {
       'uploaderUid': uploaderUid,
       'createdAt': Timestamp.fromDate(createdAt),
       'visibility': visibility,
+      'channelAvatarColor': ?channelAvatarColor,
     };
   }
 
@@ -146,6 +153,7 @@ class Video {
       uploaderUid: uploaderUid,
       createdAt: createdAt,
       visibility: visibility,
+      channelAvatarColor: channelAvatarColor,
     );
   }
 }

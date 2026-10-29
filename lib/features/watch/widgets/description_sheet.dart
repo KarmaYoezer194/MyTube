@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -7,6 +8,7 @@ import '../../../core/theme/text_styles.dart';
 import '../../../core/utils/format_views.dart';
 import '../../../core/widgets/channel_avatar.dart';
 import '../../../data/models/video.dart';
+import '../../channel/channel_navigation.dart';
 
 /// Opens when you tap the title on the watch page: likes, exact views,
 /// upload date and the full description. Drag it up to make it taller.
@@ -87,35 +89,46 @@ Future<void> showDescriptionSheet(BuildContext context, Video video) {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      ChannelAvatar(
-                        name: video.channelName,
-                        imageUrl: video.channelAvatarUrl,
-                        size: 40,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              video.channelName,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            Text(
-                              formatSubscribers(video.subscriberCount),
-                              style: AppTextStyles.meta.copyWith(
-                                color: colors.textSecondary,
-                              ),
-                            ),
-                          ],
+                  Consumer(
+                    builder: (context, ref, child) => InkWell(
+                      // Open the channel and close this sheet.
+                      onTap: () {
+                        openChannel(context, ref, video.channelId);
+                        Navigator.of(context).pop();
+                      },
+                      child: child,
+                    ),
+                    child: Row(
+                      children: [
+                        ChannelAvatar(
+                          name: video.channelName,
+                          imageUrl: video.channelAvatarUrl,
+                          color: avatarColorOrNull(video.channelAvatarColor),
+                          size: 40,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                video.channelName,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              Text(
+                                formatSubscribers(video.subscriberCount),
+                                style: AppTextStyles.meta.copyWith(
+                                  color: colors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),

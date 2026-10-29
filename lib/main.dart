@@ -81,7 +81,9 @@ Future<void> main() async {
 
   // First launch only: fill the empty database with the 13 seed videos.
   // Runs in the background; Home shows skeletons until the videos arrive.
-  VideoSeeder.seedIfEmpty(FirebaseFirestore.instance)
+  final db = FirebaseFirestore.instance;
+  VideoSeeder.seedIfEmpty(db)
+      .then((_) => VideoSeeder.seedChannelsIfMissing(db))
       .timeout(const Duration(seconds: 30))
       .then((_) => log('seed check done'))
       .catchError((Object error) => log('seed check failed: $error'));

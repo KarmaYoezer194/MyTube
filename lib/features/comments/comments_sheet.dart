@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../data/models/channel.dart';
+import '../channel/channel_navigation.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/text_styles.dart';
 import '../../core/utils/format_views.dart';
@@ -228,6 +230,14 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
                               return _CommentTile(
                                 key: ValueKey(comment.id),
                                 comment: comment,
+                                onOpenChannel: () {
+                                  openChannel(
+                                    context,
+                                    ref,
+                                    Channel.idForUser(comment.uid),
+                                  );
+                                  Navigator.of(context).pop();
+                                },
                                 liked: likedIds.contains(comment.id),
                                 onLike: (liked) {
                                   if (!checkSignedIn(
@@ -350,9 +360,13 @@ class _CommentTile extends StatelessWidget {
     required this.liked,
     required this.onLike,
     required this.onReply,
+    required this.onOpenChannel,
   });
 
   final Comment comment;
+
+  /// Tapping the avatar opens the author's channel.
+  final VoidCallback onOpenChannel;
   final bool liked;
   final ValueChanged<bool> onLike;
   final VoidCallback onReply;
@@ -367,10 +381,13 @@ class _CommentTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ChannelAvatar(
-            name: comment.displayName,
-            imageUrl: comment.avatarUrl,
-            size: 28,
+          GestureDetector(
+            onTap: onOpenChannel,
+            child: ChannelAvatar(
+              name: comment.displayName,
+              imageUrl: comment.avatarUrl,
+              size: 28,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(

@@ -5,6 +5,9 @@ import '../theme/app_colors.dart';
 import '../theme/avatar_colors.dart';
 import 'network_thumbnail.dart';
 
+/// A saved color number (like 0xFFD81B60) as a [Color], or null.
+Color? avatarColorOrNull(int? value) => value == null ? null : Color(value);
+
 /// Round channel / user picture.
 ///
 /// - Has a picture: shows it.

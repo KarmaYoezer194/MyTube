@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/app_user.dart';
 import '../../data/repositories/auth_repository.dart';
+import '../../data/repositories/channel_repository.dart';
 import '../../data/repositories/user_repository.dart';
 import 'sign_in_prompt.dart';
 
@@ -50,18 +51,19 @@ Future<AppUser?> loadMyProfile(BuildContext context, WidgetRef ref) async {
   try {
     // Read straight from Firestore (not through a provider: in Riverpod 3
     // an unwatched provider is paused and its future would never finish).
-    final profile = await repository.getProfile().timeout(
+    var profile = await repository.getProfile().timeout(
       const Duration(seconds: 10),
     );
-    if (profile != null) return profile;
-
-    final user = ref.read(authRepositoryProvider).currentUser;
-    final name = (user?.displayName?.trim().isNotEmpty ?? false)
-        ? user!.displayName!
-        : (user?.email?.split('@').first ?? 'MyTube user');
-    return await repository
-        .saveProfile(name)
-        .timeout(const Duration(seconds: 10));
+    if (profile == null) {
+      final user = ref.read(authRepositoryProvider).currentUser;
+      final name = (user?.displayName?.trim().isNotEmpty ?? false)
+          ? user!.displayName!
+          : (user?.email?.split('@').first ?? 'MyTube user');
+      profile = await repository
+          .saveProfile(name)
+          .timeout(const Duration(seconds: 10));
+    }
+    return await _withChannel(ref, profile);
   } catch (error) {
     debugPrint('PROFILE: could not load your profile: $error');
     messenger.showSnackBar(
@@ -73,5 +75,29 @@ Future<AppUser?> loadMyProfile(BuildContext context, WidgetRef ref) async {
       ),
     );
     return null;
+  }
+}
+
+/// Makes sure the account has its channel (older accounts don't yet).
+/// Creating it can give a new @handle (if the old one was taken), so the
+/// returned profile always has the channel's handle.
+Future<AppUser> _withChannel(WidgetRef ref, AppUser profile) async {
+  try {
+    final channel = await ref
+        .read(channelRepositoryProvider)
+        .ensureMyChannel(profile)
+        .timeout(const Duration(seconds: 10));
+    if (channel.handle == profile.handle) return profile;
+    return AppUser(
+      uid: profile.uid,
+      displayName: profile.displayName,
+      handle: channel.handle,
+      avatarUrl: profile.avatarUrl,
+      avatarColor: profile.avatarColor,
+      createdAt: profile.createdAt,
+    );
+  } catch (error) {
+    debugPrint('CHANNEL: could not set up your channel: $error');
+    return profile;
   }
 }

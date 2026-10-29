@@ -12,10 +12,13 @@ import '../../../core/widgets/channel_avatar.dart';
 import '../../../core/widgets/network_thumbnail.dart';
 import '../../../core/widgets/subscribe_button.dart';
 import '../../../data/models/video.dart';
+import '../../../data/repositories/channel_repository.dart';
+import '../../../data/seed/seed_videos.dart';
 import '../../../data/repositories/comment_repository.dart';
 import '../../../data/repositories/user_repository.dart';
 import '../../../data/repositories/video_repository.dart';
 import '../../auth/require_account.dart';
+import '../../channel/channel_navigation.dart';
 import '../../comments/comments_sheet.dart';
 import '../../watch/playback_controller.dart';
 import '../../watch/widgets/player_progress_bar.dart';
@@ -125,6 +128,14 @@ class _ShortPageState extends ConsumerState<ShortPage> {
     super.dispose();
   }
 
+  /// The channel's @handle (from its channel document; sample channels
+  /// also have it built in, so it shows before the document arrives).
+  String _handle(Video video) {
+    final channel = ref.watch(channelProvider(video.channelId)).value;
+    if (channel != null && channel.handle.isNotEmpty) return channel.handle;
+    return seedChannelHandles[video.channelId] ?? video.channelName;
+  }
+
   @override
   Widget build(BuildContext context) {
     // Follow the app-wide mute switch (shared with the watch page).
@@ -208,22 +219,33 @@ class _ShortPageState extends ConsumerState<ShortPage> {
             children: [
               Row(
                 children: [
-                  ChannelAvatar(
-                    name: video.channelName,
-                    imageUrl: video.channelAvatarUrl,
-                    size: 32,
-                  ),
-                  const SizedBox(width: 8),
+                  // Avatar + @handle: tap to open the channel.
                   Flexible(
-                    child: Text(
-                      // "Quick Clips" -> "@quickclips"
-                      '@${video.channelId.replaceAll('-', '')}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                    child: GestureDetector(
+                      onTap: () => openChannel(context, ref, video.channelId),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ChannelAvatar(
+                            name: video.channelName,
+                            imageUrl: video.channelAvatarUrl,
+                            color: avatarColorOrNull(video.channelAvatarColor),
+                            size: 32,
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              _handle(video),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

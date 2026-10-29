@@ -11,6 +11,7 @@ import '../../../core/widgets/duration_badge.dart';
 import '../../../core/widgets/network_thumbnail.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../../data/models/video.dart';
+import '../../channel/channel_navigation.dart';
 import '../../mini_player/player_panel_provider.dart';
 import 'video_options_sheet.dart';
 
@@ -50,9 +51,14 @@ class VideoCard extends ConsumerWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ChannelAvatar(
-                  name: video.channelName,
-                  imageUrl: video.channelAvatarUrl,
+                // Tapping the avatar opens the channel.
+                GestureDetector(
+                  onTap: () => openChannel(context, ref, video.channelId),
+                  child: ChannelAvatar(
+                    name: video.channelName,
+                    imageUrl: video.channelAvatarUrl,
+                    color: avatarColorOrNull(video.channelAvatarColor),
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(

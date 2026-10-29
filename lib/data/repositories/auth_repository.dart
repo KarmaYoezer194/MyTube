@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/app_user.dart';
+import 'channel_repository.dart';
 import 'user_repository.dart';
 import 'video_repository.dart';
 
@@ -176,15 +178,26 @@ class AuthRepository {
     // A repository for THIS user id (the app-wide one may still be
     // switching over from the guest).
     final users = UserRepository(_db, fresh.uid);
+    AppUser? profile;
     if (chosenName != null) {
-      await users.saveProfile(chosenName);
-    } else if (await users.getProfile() == null) {
-      final googleName = fresh.displayName?.trim() ?? '';
-      await users.saveProfile(
-        googleName.isNotEmpty
-            ? googleName
-            : (fresh.email?.split('@').first ?? 'MyTube user'),
-      );
+      profile = await users.saveProfile(chosenName);
+    } else {
+      profile = await users.getProfile();
+      if (profile == null) {
+        final googleName = fresh.displayName?.trim() ?? '';
+        profile = await users.saveProfile(
+          googleName.isNotEmpty
+              ? googleName
+              : (fresh.email?.split('@').first ?? 'MyTube user'),
+        );
+      }
+    }
+    // 3. Make sure I have a channel (channels/user-{uid}). Not fatal: it is
+    //    tried again before uploading or opening "Your channel".
+    try {
+      await ChannelRepository(_db, fresh.uid).ensureMyChannel(profile);
+    } catch (error) {
+      debugPrint('AUTH: could not set up your channel yet: $error');
     }
     debugPrint('AUTH: signed in as ${fresh.email} (${fresh.uid})');
   }

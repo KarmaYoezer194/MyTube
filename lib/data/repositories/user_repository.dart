@@ -154,12 +154,46 @@ class UserRepository {
         .map((doc) => doc.exists);
   }
 
-  Future<void> setSubscribed(String channelId, {required bool subscribed}) {
+  /// Subscribe / unsubscribe. My record and the channel's subscriber
+  /// counter (+1 / -1) change together in one batch; the rules check both.
+  /// (Older channels without a channel document have no counter.)
+  Future<void> setSubscribed(
+    String channelId, {
+    required bool subscribed,
+  }) async {
     final doc = _me.collection('subscribed').doc(channelId);
-    return subscribed
-        ? doc.set({'addedAt': FieldValue.serverTimestamp()})
-        : doc.delete();
+    final channel = _db.collection('channels').doc(channelId);
+    final snapshot = await channel.get();
+    final count = (snapshot.data()?['subscriberCount'] as num?)?.toInt() ?? 0;
+    final batch = _db.batch();
+    if (subscribed) {
+      batch.set(doc, {'addedAt': FieldValue.serverTimestamp()});
+    } else {
+      batch.delete(doc);
+    }
+    // A counter already at 0 (a subscription made before channels
+    // existed) isn't lowered below 0.
+    if (snapshot.exists && (subscribed || count > 0)) {
+      batch.update(channel, {
+        'subscriberCount': FieldValue.increment(subscribed ? 1 : -1),
+      });
+    }
+    await batch.commit();
   }
+
+  /// Ids of the channels I'm subscribed to, most recent first (up to
+  /// [maxSubscriptions]).
+  Stream<List<String>> watchSubscribedIds() {
+    return _me
+        .collection('subscribed')
+        .orderBy('addedAt', descending: true)
+        .limit(maxSubscriptions)
+        .snapshots()
+        .map((snapshot) => [for (final doc in snapshot.docs) doc.id]);
+  }
+
+  /// The Subscriptions tab shows up to this many channels.
+  static const int maxSubscriptions = 50;
 
   // ---------------- Watch history ----------------
 
@@ -285,4 +319,20 @@ final watchLaterIdsProvider = StreamProvider<List<String>>(
 final isSubscribedProvider = StreamProvider.family<bool, String>(
   (ref, channelId) =>
       ref.watch(userRepositoryProvider).watchIsSubscribed(channelId),
+);
+
+/// Ids of the channels I'm subscribed to, most recent first.
+final subscribedIdsProvider = StreamProvider<List<String>>(
+  (ref) => ref.watch(userRepositoryProvider).watchSubscribedIds(),
+);
+
+/// Anyone's public profile (name, @handle, avatar), live. null if they
+/// have none (guests).
+final userProfileProvider = StreamProvider.autoDispose.family<AppUser?, String>(
+  (ref, uid) => ref
+      .watch(firestoreProvider)
+      .collection('users')
+      .doc(uid)
+      .snapshots()
+      .map((doc) => doc.exists ? AppUser.fromFirestore(doc) : null),
 );

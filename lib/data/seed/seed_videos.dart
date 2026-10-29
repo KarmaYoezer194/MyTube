@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../core/constants/cloudinary_config.dart';
 import '../../core/constants/sample_media.dart';
+import '../../core/theme/avatar_colors.dart';
 
 /// One seed video. Views, likes and subscriber numbers are made up for the
 /// demo. The clips themselves are real and free to use (credits are in each
@@ -74,6 +76,113 @@ const _gearhead = ('gearhead-garage', 'Gearhead Garage', 742000);
 const _trail = ('trail-and-tarmac', 'Trail & Tarmac', 158000);
 const _nightOut = ('night-out-live', 'Night Out Live', 92400);
 const _quickClips = ('quick-clips', 'Quick Clips', 51200);
+
+/// One sample channel (written to `channels/{id}`).
+class _SeedChannel {
+  const _SeedChannel({
+    required this.id,
+    required this.name,
+    required this.handle,
+    required this.subscriberCount,
+    required this.description,
+    required this.bannerFrom,
+    required this.daysAgo,
+  });
+
+  final String id;
+  final String name;
+  final String handle;
+  final int subscriberCount;
+  final String description;
+
+  /// The banner is a wide crop of this seed video's frame:
+  /// (video key, second).
+  final (String, int) bannerFrom;
+
+  /// Channel age, counted back from the first launch.
+  final int daysAgo;
+
+  Map<String, dynamic> toFirestore(DateTime now) {
+    final (key, second) = bannerFrom;
+    return {
+      'name': name,
+      'handle': handle,
+      'description': description,
+      'bannerUrl':
+          'https://res.cloudinary.com/$cloudinaryCloudName/video/upload/'
+          'so_$second,c_fill,w_1280,h_320/mytube/seed/$key.jpg',
+      'avatarUrl': '',
+      'avatarColor': avatarColorFor(name).toARGB32(),
+      'subscriberCount': subscriberCount,
+      'ownerUid': 'seed',
+      'createdAt': Timestamp.fromDate(now.subtract(Duration(days: daysAgo))),
+    };
+  }
+}
+
+final List<_SeedChannel> _seedChannels = [
+  _SeedChannel(
+    id: _blender.$1,
+    name: _blender.$2,
+    handle: '@blenderfoundation',
+    subscriberCount: _blender.$3,
+    description:
+        'The Blender Foundation makes free, open-source 3D software and '
+        'the "open movies" made with it: Big Buck Bunny, Elephants Dream, '
+        'Sintel and Tears of Steel. Every film and its production files '
+        'are shared under Creative Commons.',
+    bannerFrom: ('sintel', 330),
+    daysAgo: 2900,
+  ),
+  _SeedChannel(
+    id: _evWeekly.$1,
+    name: _evWeekly.$2,
+    handle: '@evweekly',
+    subscriberCount: _evWeekly.$3,
+    description:
+        'Electric car reviews, road tests and range checks. New EVs every '
+        'week.',
+    bannerFrom: ('zeekr_x_review', 30),
+    daysAgo: 1100,
+  ),
+  _SeedChannel(
+    id: _gearhead.$1,
+    name: _gearhead.$2,
+    handle: '@gearheadgarage',
+    subscriberCount: _gearhead.$3,
+    description: 'Rally, racing and anything with an engine, filmed up close.',
+    bannerFrom: ('rally_drone_chase', 20),
+    daysAgo: 1600,
+  ),
+  _SeedChannel(
+    id: _trail.$1,
+    name: _trail.$2,
+    handle: '@trailandtarmac',
+    subscriberCount: _trail.$3,
+    description:
+        'Off-road adventures and calm drives through beautiful places.',
+    bannerFrom: ('snow_forest_drive', 10),
+    daysAgo: 800,
+  ),
+  _SeedChannel(
+    id: _nightOut.$1,
+    name: _nightOut.$2,
+    handle: '@nightoutlive',
+    subscriberCount: _nightOut.$3,
+    description: 'Fireworks, street performers and city nights.',
+    bannerFrom: ('bund_fireworks', 75),
+    daysAgo: 650,
+  ),
+  _SeedChannel(
+    id: _quickClips.$1,
+    name: _quickClips.$2,
+    handle: '@quickclips',
+    subscriberCount: _quickClips.$3,
+    description: 'Short, surprising clips from around the world.',
+    bannerFrom: ('vettisfossen_waterfall', 5),
+    daysAgo: 300,
+  ),
+];
 
 final List<_SeedVideo> _seedVideos = [
   // ---------------- Animation ----------------
@@ -320,11 +429,11 @@ final List<_SeedVideo> _seedVideos = [
   ),
 ];
 
-/// Writes the seed videos to Firestore the first time the app starts
-/// (when the `videos` collection is empty).
+/// Writes the sample data to Firestore the first time the app starts.
 class VideoSeeder {
   VideoSeeder._();
 
+  /// The 13 seed videos, when the `videos` collection is empty.
   static Future<void> seedIfEmpty(FirebaseFirestore db) async {
     final videos = db.collection('videos');
     final existing = await videos.limit(1).get();
@@ -339,4 +448,29 @@ class VideoSeeder {
     await batch.commit();
     debugPrint('Seeded ${_seedVideos.length} videos.');
   }
+
+  /// The 6 sample channels, if they don't exist yet (databases made before
+  /// Phase 13 have the videos but no channels). Costs one read when they
+  /// already exist.
+  static Future<void> seedChannelsIfMissing(FirebaseFirestore db) async {
+    final channels = db.collection('channels');
+    final last = await channels.doc(_seedChannels.last.id).get();
+    if (last.exists) return;
+
+    final batch = db.batch();
+    final now = DateTime.now();
+    for (final channel in _seedChannels) {
+      batch.set(channels.doc(channel.id), channel.toFirestore(now));
+    }
+    await batch.commit();
+    debugPrint('Seeded ${_seedChannels.length} channels.');
+  }
 }
+
+/// The sample channel ids (also listed in firestore.rules).
+List<String> get seedChannelIds => [for (final c in _seedChannels) c.id];
+
+/// The sample channels' handles, by channel id.
+Map<String, String> get seedChannelHandles => {
+  for (final c in _seedChannels) c.id: c.handle,
+};

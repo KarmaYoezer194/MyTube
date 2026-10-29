@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// MyTube security rules (Phase 12: final rules).
+// MyTube security rules (Phase 12: final rules; Phase 13: channels).
 //
 // There is no server (free Spark plan, no Cloud Functions), so the app does
 // the "server" work itself and THESE RULES are what keeps it honest:
@@ -83,6 +83,32 @@ service cloud.firestore {
     function myReactionDoc(videoId) {
       return /databases/$(database)/documents/users/$(request.auth.uid)/reactions/$(videoId);
     }
+    function channelDoc(channelId) {
+      return /databases/$(database)/documents/channels/$(channelId);
+    }
+    function handleDoc(handle) {
+      return /databases/$(database)/documents/handles/$(handle);
+    }
+    function mySubscriptionDoc(channelId) {
+      return /databases/$(database)/documents/users/$(request.auth.uid)/subscribed/$(channelId);
+    }
+
+    // "@karmayoezer4821": lower-case letters, digits, '.', '_' or '-'.
+    function isHandle(value) {
+      return value is string && value.matches('@[a-z0-9._-]{3,30}');
+    }
+
+    // After this request, [handle] is reserved for me in handles/.
+    function handleIsMineAfter(handle) {
+      return existsAfter(handleDoc(handle)) &&
+        getAfter(handleDoc(handle)).data.uid == request.auth.uid;
+    }
+
+    // A color saved as a number, like 0xFFD81B60.
+    function isColor(value) {
+      return value is int && value >= 0 && value <= 4294967295;
+    }
+
     function myCommentLikeDoc(videoId, commentId) {
       return /databases/$(database)/documents/users/$(request.auth.uid)/commentLikes/$(videoId + '_' + commentId);
     }
@@ -106,19 +132,10 @@ service cloud.firestore {
       function isName(value) {
         return isText(value, 1, 50);
       }
-      // "@karmayoezer4821": lower-case letters, digits, '.', '_' or '-'.
-      function isHandle(value) {
-        return value is string && value.matches('@[a-z0-9._-]{3,30}');
-      }
       // Empty (letter avatar) or a Cloudinary picture.
       function isAvatarUrl(value) {
         return value == '' || isCloudinaryUrl(value);
       }
-      // A color saved as a number, like 0xFFD81B60.
-      function isColor(value) {
-        return value is int && value >= 0 && value <= 4294967295;
-      }
-
       // Profiles (name, @handle, avatar) are public; only accounts have one.
       allow read: if signedIn();
 
@@ -134,11 +151,13 @@ service cloud.firestore {
         request.resource.data.createdAt == request.time;
 
       // Older profiles may have an old-style handle; it only has to be
-      // valid when it is CHANGED.
+      // valid when it is CHANGED, and a new handle must be reserved for me
+      // in handles/ in the same batch.
       allow update: if isMyAccount(uid) &&
         onlyChanges(['displayName', 'handle', 'avatarUrl', 'avatarColor']) &&
         (!changes('displayName') || isName(request.resource.data.displayName)) &&
-        (!changes('handle') || isHandle(request.resource.data.handle)) &&
+        (!changes('handle') || (isHandle(request.resource.data.handle) &&
+          handleIsMineAfter(request.resource.data.handle))) &&
         (!changes('avatarUrl') || isAvatarUrl(request.resource.data.avatarUrl)) &&
         (!changes('avatarColor') || isColor(request.resource.data.avatarColor));
 
@@ -196,12 +215,27 @@ service cloud.firestore {
 
       // ---- Subscriptions ----
       // subscribed/{channelId}: addedAt.
+      // The channel's subscriberCount must go +1 / -1 in the same batch
+      // (channels without a document - old uploads - have no counter).
+      // You can't subscribe to your own channel.
       match /subscribed/{channelId} {
+        function subscribersChangeBy(change) {
+          return getAfter(channelDoc(channelId)).data.subscriberCount ==
+            get(channelDoc(channelId)).data.subscriberCount + change;
+        }
+
         allow read: if isMe(uid);
-        allow create, update: if isMyAccount(uid) &&
+        allow create: if isMyAccount(uid) &&
+          channelId != 'user-' + uid &&
           request.resource.data.keys().hasOnly(['addedAt']) &&
-          request.resource.data.addedAt == request.time;
-        allow delete: if isMyAccount(uid);
+          request.resource.data.addedAt == request.time &&
+          (!exists(channelDoc(channelId)) || subscribersChangeBy(1));
+        // (A counter that is already 0 - e.g. a subscription made before
+        // channels existed - stays at 0.)
+        allow delete: if isMyAccount(uid) &&
+          (!exists(channelDoc(channelId)) || subscribersChangeBy(-1) ||
+            (get(channelDoc(channelId)).data.subscriberCount <= 0 &&
+              subscribersChangeBy(0)));
       }
 
       // ---- Comment likes ----
@@ -227,6 +261,97 @@ service cloud.firestore {
           (!exists(commentDoc(resource.data.videoId, resource.data.commentId)) ||
             commentLikesChangeBy(resource.data.videoId, resource.data.commentId, -1));
       }
+    }
+
+    // ================= Channels =================
+    // channels/{channelId}: name, handle, description, bannerUrl,
+    // avatarUrl, avatarColor, subscriberCount, ownerUid, createdAt.
+    // - 6 sample channels (owner 'seed'), written on first launch;
+    // - one per account: 'user-{uid}', same name / handle / color as the
+    //   profile in users/{uid}.
+    match /channels/{channelId} {
+      function isAbout(value) {
+        return isText(value, 0, 1000);
+      }
+      function isBanner(value) {
+        return value == '' || isCloudinaryUrl(value);
+      }
+      function channelKeys() {
+        return ['name', 'handle', 'description', 'bannerUrl', 'avatarUrl',
+          'avatarColor', 'subscriberCount', 'ownerUid', 'createdAt'];
+      }
+      // My profile, as it will be after this request.
+      function myProfileAfter() {
+        return getAfter(userDoc(request.auth.uid)).data;
+      }
+
+      allow read: if signedIn();
+
+      allow create: if
+        // A sample channel (by a guest or account, on first launch).
+        (signedIn() &&
+          channelId in ['blender-foundation', 'ev-weekly', 'gearhead-garage',
+            'trail-and-tarmac', 'night-out-live', 'quick-clips'] &&
+          request.resource.data.keys().hasOnly(channelKeys()) &&
+          request.resource.data.ownerUid == 'seed' &&
+          isText(request.resource.data.name, 1, 50) &&
+          isHandle(request.resource.data.handle) &&
+          isBanner(request.resource.data.bannerUrl) &&
+          request.resource.data.subscriberCount is int) ||
+        // My own channel: starts at 0 subscribers, copies my profile.
+        (hasAccount() && channelId == 'user-' + request.auth.uid &&
+          request.resource.data.keys().hasOnly(channelKeys()) &&
+          request.resource.data.ownerUid == request.auth.uid &&
+          request.resource.data.name == myProfileAfter().displayName &&
+          request.resource.data.handle == myProfileAfter().handle &&
+          request.resource.data.avatarColor == myProfileAfter().avatarColor &&
+          isHandle(request.resource.data.handle) &&
+          handleIsMineAfter(request.resource.data.handle) &&
+          isAbout(request.resource.data.description) &&
+          isBanner(request.resource.data.bannerUrl) &&
+          (request.resource.data.avatarUrl == '' ||
+            isCloudinaryUrl(request.resource.data.avatarUrl)) &&
+          request.resource.data.subscriberCount == 0 &&
+          request.resource.data.createdAt == request.time);
+
+      allow update: if
+        // "Edit channel" by its owner (never the subscriber count).
+        (isMyAccount(resource.data.ownerUid) &&
+          onlyChanges(['name', 'handle', 'description', 'bannerUrl',
+            'avatarColor']) &&
+          request.resource.data.name == myProfileAfter().displayName &&
+          request.resource.data.handle == myProfileAfter().handle &&
+          request.resource.data.avatarColor == myProfileAfter().avatarColor &&
+          (!changes('handle') || handleIsMineAfter(request.resource.data.handle)) &&
+          isAbout(request.resource.data.description) &&
+          isBanner(request.resource.data.bannerUrl)) ||
+        // Someone else (un)subscribes: +1 / -1, together with their own
+        // users/{uid}/subscribed record.
+        (hasAccount() && resource.data.ownerUid != request.auth.uid &&
+          onlyChanges(['subscriberCount']) &&
+          ((request.resource.data.subscriberCount ==
+                resource.data.subscriberCount + 1 &&
+              !exists(mySubscriptionDoc(channelId)) &&
+              existsAfter(mySubscriptionDoc(channelId))) ||
+            (request.resource.data.subscriberCount ==
+                resource.data.subscriberCount - 1 &&
+              exists(mySubscriptionDoc(channelId)) &&
+              !existsAfter(mySubscriptionDoc(channelId)))));
+
+      allow delete: if false;
+    }
+
+    // ================= Handles =================
+    // handles/{@handle}: uid. Reserves an @handle for one account, so two
+    // channels can't have the same one. I can only reserve the handle my
+    // profile uses after this request, and only release my own.
+    match /handles/{handle} {
+      allow read: if signedIn();
+      allow create: if hasAccount() && isHandle(handle) &&
+        request.resource.data.keys().hasOnly(['uid']) &&
+        request.resource.data.uid == request.auth.uid &&
+        getAfter(userDoc(request.auth.uid)).data.handle == handle;
+      allow delete: if hasAccount() && resource.data.uid == request.auth.uid;
     }
 
     // ================= Videos =================
@@ -272,7 +397,7 @@ service cloud.firestore {
           d.keys().hasOnly(['title', 'description', 'videoUrl', 'thumbnailUrl',
             'durationSeconds', 'channelId', 'channelName', 'channelAvatarUrl',
             'subscriberCount', 'views', 'likes', 'category', 'isShort',
-            'uploaderUid', 'createdAt', 'visibility']) &&
+            'uploaderUid', 'createdAt', 'visibility', 'channelAvatarColor']) &&
           d.uploaderUid == request.auth.uid &&
           d.channelId == 'user-' + request.auth.uid &&
           d.channelName == get(userDoc(request.auth.uid)).data.displayName &&
@@ -281,6 +406,7 @@ service cloud.firestore {
           isCloudinaryUrl(d.videoUrl) &&
           isCloudinaryUrl(d.thumbnailUrl) &&
           (d.channelAvatarUrl == '' || isCloudinaryUrl(d.channelAvatarUrl)) &&
+          (!('channelAvatarColor' in d) || isColor(d.channelAvatarColor)) &&
           isLength(d.durationSeconds) &&
           d.subscriberCount == 0 &&
           d.views == 0 &&
@@ -293,18 +419,23 @@ service cloud.firestore {
       }
 
       // The uploader edits their video's details (not its counters).
+      // Channel name / color follow the profile (also when both change in
+      // the same "Edit channel" batch, hence getAfter).
       function isOwnerEdit() {
         let d = request.resource.data;
         return isMyAccount(resource.data.uploaderUid) &&
           onlyChanges(['title', 'description', 'thumbnailUrl', 'category',
-            'visibility', 'channelName', 'channelAvatarUrl']) &&
+            'visibility', 'channelName', 'channelAvatarUrl',
+            'channelAvatarColor']) &&
           isText(d.title, 1, 100) &&
           isText(d.description, 0, 5000) &&
           (!changes('thumbnailUrl') || isCloudinaryUrl(d.thumbnailUrl)) &&
           (!changes('channelAvatarUrl') || d.channelAvatarUrl == '' ||
             isCloudinaryUrl(d.channelAvatarUrl)) &&
           (!changes('channelName') ||
-            d.channelName == get(userDoc(request.auth.uid)).data.displayName) &&
+            d.channelName == getAfter(userDoc(request.auth.uid)).data.displayName) &&
+          (!changes('channelAvatarColor') ||
+            d.channelAvatarColor == getAfter(userDoc(request.auth.uid)).data.avatarColor) &&
           isCategory(d.category) &&
           isVisibility(d.visibility);
       }

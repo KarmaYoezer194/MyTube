@@ -35,6 +35,13 @@ void main() {
     expect(allows.length, starts.length);
   });
 
+  test('channels and handles are protected', () {
+    expect(code, contains('match /channels/{channelId}'));
+    expect(code, contains('match /handles/{handle}'));
+    expect(code, contains("onlyChanges(['subscriberCount'])"));
+    expect(code, contains('allow delete: if false;'));
+  });
+
   test('guests can still keep history and add views', () {
     expect(code, contains('match /history/{videoId}'));
     expect(code, contains("onlyChanges(['views'])"));

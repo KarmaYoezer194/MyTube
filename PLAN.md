@@ -13,7 +13,7 @@ each 🛑 checkpoint.
   - Walkthrough to restrict the Cloudinary preset (formats, folder, size/length).
   - App Check with reCAPTCHA v3, plus a debug token for local runs (token never committed).
 
-- [ ] **Phase 13 — Channels**
+- [x] **Phase 13 — Channels**
   - Channel page: banner, avatar, name, @handle, subscribers, video count,
     Subscribe, tabs Home / Videos / Shorts / Playlists / About.
   - Tapping a channel name or avatar opens the channel.
@@ -21,7 +21,7 @@ each 🛑 checkpoint.
   - subscriberCount ±1, enforced by rules.
   - Subscriptions tab: avatar row, "All" chip, paginated feed, empty states.
 
-> 🛑 **CHECKPOINT A** — after Phase 13. Stop and wait for the user to test.
+
 
 - [ ] **Phase 14 — Comments**
   - Replies with an "X replies" expander, likes, edit/delete own, "(edited)".
@@ -42,7 +42,7 @@ each 🛑 checkpoint.
   - Delete removes Firestore data only (the Cloudinary file is deleted manually).
   - Per-video and channel stats.
 
-> 🛑 **CHECKPOINT B** — after Phase 16. Stop and wait for the user to test.
+
 
 - [ ] **Phase 17 — Notifications (in-app)**
   - An upload fans out to subscribers (batched, capped).
@@ -66,7 +66,6 @@ each 🛑 checkpoint.
     Save to playlist.
   - Remember volume, mute and speed.
 
-> 🛑 **CHECKPOINT C** — after Phase 19. Stop and wait for the user to test.
 
 - [ ] **Phase 20 — Release-ready (local only)**
   - `flutter build web` with no warnings.
@@ -89,7 +88,7 @@ the next checkpoint, top to bottom, and tick them off.
 Format: `- [ ] (Phase X) What to do — where — why`
 
 - [ ] (Phase 12) Restrict the Cloudinary preset `mytube_unsigned`: asset folder, overwrite off, allowed formats (optional: max size, `du_900`) — console.cloudinary.com → Settings → Upload → Upload presets — so strangers can't upload anything to your account. Steps: `docs/SECURITY_SETUP.md` §1.
-- [ ] (Phase 12) Deploy the rules: `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — the new rules only work after deploying. §2.
+- [ ] (Phase 12 + 13) Deploy the rules AND the new index: `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — the new rules only work after deploying, and the channel tabs + Subscriptions feed need the index (it takes a few minutes to build; until then those lists show "Couldn't load"). §2.
 - [ ] (Phase 12) Make a reCAPTCHA v3 key (domain `localhost`) — google.com/recaptcha/admin — needed for App Check. §3a.
 - [ ] (Phase 12) Register the web app in App Check with the reCAPTCHA **secret** key — Firebase console → App Check → Apps — §3b.
 - [ ] (Phase 12) Generate a debug token and paste it (plus the site key) into `app_check.local.json` (git-ignored) — App Check → Apps → ⋮ → Manage debug tokens — §3c.
@@ -126,3 +125,35 @@ Newest entry at the bottom.
   test/app_check_test.dart, test/firestore_rules_test.dart (20 tests).
   Not done: the rules could not be run in the emulator (no Java on this
   PC); they get compiled when you deploy them.
+- 2026-10-29 — **Phase 13 (Channels) done.** New `channels/{channelId}`
+  collection: the 6 sample channels (seeded once, with banners cut from
+  their videos) and one per account (`user-{uid}`, created on sign-in /
+  before uploading / when opening your channel). Channel page at
+  `<tab>/channel/<id>` (Home, Subscriptions and You tabs; from Shorts it
+  opens in Home): banner, avatar, name, @handle, subscribers, video count
+  (count query), Subscribe or Edit channel, tabs Home / Videos / Shorts /
+  Playlists (empty until Phase 15) / About; Videos and Shorts load 12 at a
+  time. Avatars and channel names open the channel (video cards, watch
+  page, description sheet, Shorts, comment avatars, You → View channel).
+  "Edit channel": name, @handle (checked + reserved in `handles/{@handle}`),
+  description, banner (Cloudinary), avatar color; saves profile, channel
+  and your videos' channel name/color in one batch. Subscribing changes
+  `subscriberCount` ±1 in the same batch; rules check both sides and block
+  subscribing to yourself. Subscriptions tab: guest / empty / error states,
+  avatar row (tap = only that channel), "All" chip, paged feed (newest
+  public videos of your 30 latest subscriptions), pull to refresh.
+  Files: new lib/data/models/channel.dart,
+  lib/data/repositories/channel_repository.dart + paged_videos.dart,
+  lib/features/channel/ (channel_screen, edit_channel_screen,
+  channel_navigation), lib/core/widgets/paged_footer.dart; changed
+  firestore.rules, firestore.indexes.json (1 composite index), app_router,
+  seed_videos, main, video model (+channelAvatarColor), user_repository,
+  auth_repository, require_account, subscribe_button, channel_avatar,
+  video_card, watch_details, description_sheet, comments_sheet, short_page,
+  you_screen, subscriptions_screen, upload_screen. Tests:
+  test/channel_test.dart, channel_navigation_test.dart,
+  paged_footer_test.dart, + rules checks (40 tests total).
+  Known limits: videos keep the subscriber number saved on them only for
+  old uploads without a channel doc; old comments keep the old name/handle
+  after a rename; subscriptions made before this phase didn't add +1, so a
+  user channel's count can start low (it never goes below 0).

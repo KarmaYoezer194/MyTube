@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/channel/channel_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
 import '../../features/search/search_screen.dart';
@@ -45,6 +46,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     path: 'notifications',
                     builder: (context, state) => const NotificationsScreen(),
                   ),
+                  _channelRoute(),
                 ],
               ),
             ],
@@ -65,6 +67,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/subscriptions',
                 builder: (context, state) => const SubscriptionsScreen(),
+                routes: [_channelRoute()],
               ),
             ],
           ),
@@ -98,6 +101,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     path: 'settings',
                     builder: (context, state) => const SettingsScreen(),
                   ),
+                  _channelRoute(),
                 ],
               ),
             ],
@@ -107,3 +111,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+/// `<tab>/channel/<channelId>`: a channel page inside a tab (see
+/// features/channel/channel_navigation.dart).
+GoRoute _channelRoute() => GoRoute(
+  path: 'channel/:channelId',
+  builder: (context, state) => ChannelScreen(
+    // A new key per channel, so going from one channel to another starts
+    // fresh (tabs, scroll position).
+    key: ValueKey(state.pathParameters['channelId']),
+    channelId: state.pathParameters['channelId'] ?? '',
+  ),
+);

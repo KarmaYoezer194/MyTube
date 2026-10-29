@@ -13,7 +13,9 @@ import '../../core/widgets/skeleton.dart';
 import '../../data/models/video.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/user_repository.dart';
+import '../../data/models/channel.dart';
 import '../auth/sign_in_screen.dart';
+import '../channel/channel_navigation.dart';
 import '../mini_player/player_panel_provider.dart';
 import '../upload/create_sheet.dart';
 import 'you_providers.dart';
@@ -268,7 +270,11 @@ class _SignedInHeader extends ConsumerWidget {
                 ),
                 const SizedBox(height: 2),
                 GestureDetector(
-                  onTap: () => context.push('/you/videos'),
+                  onTap: () => openChannel(
+                    context,
+                    ref,
+                    Channel.idForUser(ref.read(currentUidProvider)),
+                  ),
                   child: Text.rich(
                     TextSpan(
                       text: profile == null ? '' : '${profile.handle} · ',

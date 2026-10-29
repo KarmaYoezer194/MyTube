@@ -11,8 +11,10 @@ import '../../../core/widgets/animated_toggle_icon.dart';
 import '../../../core/widgets/channel_avatar.dart';
 import '../../../core/widgets/subscribe_button.dart';
 import '../../../data/models/video.dart';
+import '../../../data/repositories/channel_repository.dart';
 import '../../../data/repositories/user_repository.dart';
 import '../../auth/require_account.dart';
+import '../../channel/channel_navigation.dart';
 import '../../comments/comments_preview_card.dart';
 import 'description_sheet.dart';
 
@@ -37,6 +39,13 @@ class WatchDetails extends ConsumerWidget {
 
     void showSaveError(Object _) =>
         showMessage("Couldn't save. Check your internet connection.");
+
+    // The channel (live subscriber count). Older uploads without a channel
+    // document use the numbers saved on the video.
+    final channel = channelOrFallback(
+      ref.watch(channelProvider(video.channelId)).value,
+      video,
+    );
 
     // My like/dislike and Watch later state (live from Firestore).
     final reaction = ref.watch(reactionProvider(video.id)).value ?? 0;
@@ -109,34 +118,51 @@ class WatchDetails extends ConsumerWidget {
           ),
         ),
 
-        // ---- Channel row ----
+        // ---- Channel row (tap = open the channel) ----
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
           child: Row(
             children: [
-              ChannelAvatar(
-                name: video.channelName,
-                imageUrl: video.channelAvatarUrl,
-              ),
-              const SizedBox(width: 12),
-              Flexible(
-                child: Text(
-                  video.channelName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: colors.textPrimary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
+              Expanded(
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () => openChannel(context, ref, video.channelId),
+                  child: Row(
+                    children: [
+                      ChannelAvatar(
+                        name: channel.name,
+                        imageUrl: channel.avatarUrl,
+                        color: channel.avatarColorValue,
+                      ),
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: Text(
+                          channel.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: colors.textPrimary,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        formatCompactCount(
+                          channel.subscriberCount < 0
+                              ? 0
+                              : channel.subscriberCount,
+                        ),
+                        style: AppTextStyles.meta.copyWith(
+                          color: colors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                formatCompactCount(video.subscriberCount),
-                style: AppTextStyles.meta.copyWith(color: colors.textSecondary),
-              ),
-              const Spacer(),
               SubscribeButton(
                 channelId: video.channelId,
                 channelName: video.channelName,
