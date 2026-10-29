@@ -1,0 +1,21 @@
+Build in these phases. After EACH phase: list every file created or
+changed, give the full code, tell me how to test it in Chrome, then
+STOP and wait for me to say "next".
+
+Phase 1: Firebase setup steps (flutterfire configure, enabling
+         Anonymous Auth, Firestore, Storage), pubspec, theme, router,
+         bottom navigation shell, models.
+Phase 2: Seed data + Home feed (cards, chips, Shorts shelf, skeletons,
+         hide-on-scroll top bar).
+Phase 3: Watch page with custom player and related videos.
+Phase 4: Mini player.
+Phase 5: Likes, views, subscribe button, history, watch later.
+Phase 6: Comments.
+Phase 7: Shorts.
+Phase 8: Search and notifications.
+Phase 9: Upload video and upload Short.
+Phase 10: You tab, settings, light/dark theme, final polish and
+          a check against the animations checklist.
+
+If something is ambiguous, ask me before writing code. When I paste an
+error, explain the cause in one or two sentences before giving the fix.

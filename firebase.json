@@ -1,0 +1,17 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "mytube-6d311",
+          "configurations": {
+            "web": "1:817031946936:web:3a5901426f8a79762f0a4d"
+          }
+        }
+      }
+    }
+  }
+}

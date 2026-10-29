@@ -1,0 +1,64 @@
+rules_version = '2';
+
+// Simple rules for a student demo:
+// - you must be signed in (anonymous is fine) to read or write anything
+// - you can only change YOUR OWN data
+// - anyone signed in may bump the public counters (views, likes) on a video
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMe(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // Only these fields of a video may be changed by people who
+    // didn't upload it.
+    function onlyChangesCounters() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['views', 'likes', 'durationSeconds']);
+    }
+
+    // ---------- Users ----------
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow write: if isMe(uid);
+
+      // reactions, history, watchLater, subscribed: private to the user
+      match /{subcollection}/{docId} {
+        allow read, write: if isMe(uid);
+      }
+    }
+
+    // ---------- Videos ----------
+    match /videos/{videoId} {
+      allow read: if signedIn();
+
+      // Your own uploads, plus the seed videos written on first launch.
+      allow create: if signedIn() && (
+        request.resource.data.uploaderUid == request.auth.uid ||
+        request.resource.data.uploaderUid == 'seed'
+      );
+
+      allow update: if isMe(resource.data.uploaderUid) ||
+        (signedIn() && onlyChangesCounters());
+
+      allow delete: if isMe(resource.data.uploaderUid);
+
+      // ---------- Comments ----------
+      match /comments/{commentId} {
+        allow read: if signedIn();
+        allow create: if signedIn() &&
+          request.resource.data.uid == request.auth.uid;
+        // Others may only change the like counter.
+        allow update: if isMe(resource.data.uid) || (signedIn() &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['likes']));
+        allow delete: if isMe(resource.data.uid);
+      }
+    }
+  }
+}
