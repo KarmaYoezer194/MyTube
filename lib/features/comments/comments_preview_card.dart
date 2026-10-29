@@ -51,8 +51,10 @@ class CommentsPreviewCard extends ConsumerWidget {
                   if (comments != null)
                     Text(
                       formatCompactCount(comments.length),
-                      style: AppTextStyles.meta
-                          .copyWith(color: colors.textSecondary, fontSize: 13),
+                      style: AppTextStyles.meta.copyWith(
+                        color: colors.textSecondary,
+                        fontSize: 13,
+                      ),
                     ),
                 ],
               ),

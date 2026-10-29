@@ -1,42 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
+import '../theme/app_colors.dart';
+import '../theme/avatar_colors.dart';
 import 'network_thumbnail.dart';
 
 /// Round channel / user picture.
 ///
-/// If there is no picture, shows the first letter of the name on a colored
-/// circle (like new YouTube accounts). The same name always gets the same
-/// color.
+/// - Has a picture: shows it.
+/// - Has a name: the first letter on a colored circle (like new YouTube
+///   accounts). The color is [color] if given (a user's saved avatarColor),
+///   otherwise it comes from the name, so it is always the same.
+/// - No name (a guest): a grey circle with a person icon.
 class ChannelAvatar extends StatelessWidget {
   const ChannelAvatar({
     super.key,
     required this.name,
     this.imageUrl = '',
     this.size = 36,
+    this.color,
   });
 
   final String name;
   final String imageUrl;
   final double size;
-
-  static const _palette = [
-    Color(0xFFD81B60),
-    Color(0xFF8E24AA),
-    Color(0xFF5E35B1),
-    Color(0xFF3949AB),
-    Color(0xFF0277BD),
-    Color(0xFF00897B),
-    Color(0xFF558B2F),
-    Color(0xFFEF6C00),
-    Color(0xFF6D4C41),
-    Color(0xFF546E7A),
-  ];
-
-  Color get _color {
-    // Add up the character codes: simple and always the same for a name.
-    final sum = name.codeUnits.fold<int>(0, (total, unit) => total + unit);
-    return _palette[sum % _palette.length];
-  }
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -50,13 +38,34 @@ class ChannelAvatar extends StatelessWidget {
     }
 
     final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      return Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: context.colors.surface,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          Symbols.person,
+          fill: 1,
+          size: size * 0.6,
+          color: context.colors.textSecondary,
+        ),
+      );
+    }
+
     return Container(
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: BoxDecoration(color: _color, shape: BoxShape.circle),
+      decoration: BoxDecoration(
+        color: color ?? avatarColorFor(trimmed),
+        shape: BoxShape.circle,
+      ),
       child: Text(
-        trimmed.isEmpty ? '?' : trimmed.characters.first.toUpperCase(),
+        trimmed.characters.first.toUpperCase(),
         style: TextStyle(
           color: Colors.white,
           fontSize: size * 0.45,

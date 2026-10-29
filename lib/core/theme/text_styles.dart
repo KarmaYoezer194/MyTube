@@ -23,10 +23,7 @@ class AppTextStyles {
   );
 
   /// "Channel · 1.2M views · 3 days ago"
-  static const TextStyle meta = TextStyle(
-    fontSize: 12,
-    height: 1.35,
-  );
+  static const TextStyle meta = TextStyle(fontSize: 12, height: 1.35);
 
   /// Section headers like "History" or "Shorts".
   static const TextStyle sectionHeader = TextStyle(
@@ -35,10 +32,7 @@ class AppTextStyles {
   );
 
   /// Normal body text (descriptions, comments).
-  static const TextStyle body = TextStyle(
-    fontSize: 14,
-    height: 1.4,
-  );
+  static const TextStyle body = TextStyle(fontSize: 14, height: 1.4);
 
   /// Text inside chips and pill buttons.
   static const TextStyle chip = TextStyle(
@@ -47,10 +41,7 @@ class AppTextStyles {
   );
 
   /// Labels under the bottom navigation icons.
-  static const TextStyle navLabel = TextStyle(
-    fontSize: 10,
-    height: 1.2,
-  );
+  static const TextStyle navLabel = TextStyle(fontSize: 10, height: 1.2);
 
   /// Text inside the duration badge on thumbnails.
   static const TextStyle durationBadge = TextStyle(

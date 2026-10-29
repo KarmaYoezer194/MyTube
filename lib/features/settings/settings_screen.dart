@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/user_repository.dart';
+import '../auth/sign_in_screen.dart';
 import 'settings_providers.dart';
 
 /// Settings: Appearance (device / dark / light), Autoplay, Clear watch
@@ -13,10 +15,10 @@ class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   static String _themeLabel(ThemeMode mode) => switch (mode) {
-        ThemeMode.system => 'Use device theme',
-        ThemeMode.dark => 'Dark theme',
-        ThemeMode.light => 'Light theme',
-      };
+    ThemeMode.system => 'Use device theme',
+    ThemeMode.dark => 'Dark theme',
+    ThemeMode.light => 'Light theme',
+  };
 
   Future<void> _chooseAppearance(BuildContext context, WidgetRef ref) {
     final controller = ref.read(themeModeProvider.notifier);
@@ -79,9 +81,49 @@ class SettingsScreen extends ConsumerWidget {
         const SnackBar(content: Text('Watch history cleared')),
       );
     } catch (_) {
-      messenger.showSnackBar(const SnackBar(
-        content: Text("Couldn't clear history. Check your connection."),
-      ));
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text("Couldn't clear history. Check your connection."),
+        ),
+      );
+    }
+  }
+
+  /// Asks first, then signs out. The app immediately continues as a brand-
+  /// new guest (new anonymous user), so you can keep watching.
+  Future<void> _signOut(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Sign out?'),
+        content: const Text(
+          "You'll keep watching as a guest. Sign in again any time to get "
+          'your likes, subscriptions and videos back.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Sign out'),
+          ),
+        ],
+      ),
+    );
+    if (!(confirmed ?? false)) return;
+    try {
+      await ref.read(authRepositoryProvider).signOutToGuest();
+      messenger.showSnackBar(const SnackBar(content: Text('Signed out')));
+    } catch (error) {
+      debugPrint('AUTH: sign-out failed: $error');
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text("Couldn't sign out. Check your connection."),
+        ),
+      );
     }
   }
 
@@ -90,18 +132,20 @@ class SettingsScreen extends ConsumerWidget {
     final colors = context.colors;
     final themeMode = ref.watch(themeModeProvider);
     final autoplay = ref.watch(autoplayProvider);
+    final signedIn = ref.watch(isSignedInProvider);
+    final email = ref.watch(authUserProvider).value?.email;
 
     Widget sectionTitle(String text) => Padding(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
-          child: Text(
-            text,
-            style: TextStyle(
-              color: colors.textSecondary,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        );
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: colors.textSecondary,
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -115,6 +159,26 @@ class SettingsScreen extends ConsumerWidget {
       ),
       body: ListView(
         children: [
+          sectionTitle('Account'),
+          if (signedIn) ...[
+            ListTile(
+              leading: const Icon(Symbols.account_circle),
+              title: const Text('Signed in as'),
+              subtitle: Text(email ?? 'Google account'),
+            ),
+            ListTile(
+              leading: const Icon(Symbols.logout),
+              title: const Text('Sign out'),
+              onTap: () => _signOut(context, ref),
+            ),
+          ] else
+            ListTile(
+              leading: const Icon(Symbols.login),
+              title: const Text('Sign in'),
+              subtitle: const Text('Like, comment, subscribe, save and upload'),
+              onTap: () => openSignIn(context),
+            ),
+
           sectionTitle('General'),
           ListTile(
             leading: const Icon(Symbols.contrast),

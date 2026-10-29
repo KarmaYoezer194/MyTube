@@ -26,8 +26,8 @@ class SelectedCategoryController extends Notifier<String> {
 
 final selectedCategoryProvider =
     NotifierProvider<SelectedCategoryController, String>(
-  SelectedCategoryController.new,
-);
+      SelectedCategoryController.new,
+    );
 
 /// Videos hidden with "Not interested" (only until the page is reloaded).
 class NotInterestedController extends Notifier<Set<String>> {
@@ -41,8 +41,8 @@ class NotInterestedController extends Notifier<Set<String>> {
 
 final notInterestedProvider =
     NotifierProvider<NotInterestedController, Set<String>>(
-  NotInterestedController.new,
-);
+      NotInterestedController.new,
+    );
 
 /// The long videos shown on Home, filtered by the selected chip.
 final homeFeedProvider = Provider<AsyncValue<List<Video>>>((ref) {
@@ -50,14 +50,18 @@ final homeFeedProvider = Provider<AsyncValue<List<Video>>>((ref) {
   final hidden = ref.watch(notInterestedProvider);
   final recentCutoff = DateTime.now().subtract(const Duration(days: 30));
 
-  return ref.watch(allVideosProvider).whenData(
+  return ref
+      .watch(allVideosProvider)
+      .whenData(
         (videos) => videos
             .where((v) => !v.isShort && !v.isUnlisted && !hidden.contains(v.id))
-            .where((v) => switch (category) {
-                  allCategory => true,
-                  recentlyUploadedCategory => v.createdAt.isAfter(recentCutoff),
-                  _ => v.category == category,
-                })
+            .where(
+              (v) => switch (category) {
+                allCategory => true,
+                recentlyUploadedCategory => v.createdAt.isAfter(recentCutoff),
+                _ => v.category == category,
+              },
+            )
             .toList(),
       );
 });

@@ -270,7 +270,8 @@ final List<_SeedVideo> _seedVideos = [
   _SeedVideo(
     key: 'vettisfossen_waterfall',
     title: "Norway's tallest free-falling waterfall 😳",
-    description: 'Vettisfossen, Norway.\n\n'
+    description:
+        'Vettisfossen, Norway.\n\n'
         'Video by kallerna, licensed under CC BY-SA 3.0.\n'
         'Source: Wikimedia Commons.',
     category: 'Entertainment',
@@ -286,7 +287,8 @@ final List<_SeedVideo> _seedVideos = [
   _SeedVideo(
     key: 'tgv_passing',
     title: "When the TGV doesn't stop at your station 🚄💨",
-    description: 'A high-speed train passes Labenne station, France.\n\n'
+    description:
+        'A high-speed train passes Labenne station, France.\n\n'
         'Video by Bastoche*, licensed under CC BY-SA 4.0.\n'
         'Source: Wikimedia Commons.',
     category: 'Entertainment',
@@ -302,7 +304,8 @@ final List<_SeedVideo> _seedVideos = [
   _SeedVideo(
     key: 'magpies_calling',
     title: 'These magpies have a LOT to say 🐦',
-    description: 'A noisy group of magpies.\n\n'
+    description:
+        'A noisy group of magpies.\n\n'
         'Video by LyaiDemon, licensed under CC BY 4.0.\n'
         'Source: Wikimedia Commons.',
     category: 'Entertainment',

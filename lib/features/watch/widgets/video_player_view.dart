@@ -55,23 +55,23 @@ class VideoPlayerView extends ConsumerWidget {
       color: Colors.black,
       child: switch (playback) {
         AsyncData(:final value?) => _PlayerSurface(
-            // A new video = a new controller = fresh controls state.
-            key: ObjectKey(value),
-            controller: value,
-            view: this,
-          ),
+          // A new video = a new controller = fresh controls state.
+          key: ObjectKey(value),
+          controller: value,
+          view: this,
+        ),
         AsyncError() when compact => const Center(
-            child: Icon(Symbols.error, color: Colors.white70),
-          ),
+          child: Icon(Symbols.error, color: Colors.white70),
+        ),
         AsyncError() => _UnavailableView(
-            onRetry: () => ref.invalidate(playbackProvider),
-            onMinimize: onMinimize,
-          ),
+          onRetry: () => ref.invalidate(playbackProvider),
+          onMinimize: onMinimize,
+        ),
         _ when compact => NetworkThumbnail(url: video.thumbnailUrl),
         _ => _LoadingView(
-            thumbnailUrl: video.thumbnailUrl,
-            onMinimize: onMinimize,
-          ),
+          thumbnailUrl: video.thumbnailUrl,
+          onMinimize: onMinimize,
+        ),
       },
     );
   }
@@ -243,7 +243,8 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
   /// Watches for the video reaching its end.
   void _onPlayerChanged() {
     final v = _controller.value;
-    final ended = !v.isPlaying &&
+    final ended =
+        !v.isPlaying &&
         v.duration > Duration.zero &&
         v.position >= v.duration - const Duration(milliseconds: 250);
     if (ended == _ended) return;
@@ -312,8 +313,9 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
   }
 
   void _onDoubleTap() {
-    final side =
-        _doubleTapX > _playerWidth / 2 ? SeekSide.forward : SeekSide.back;
+    final side = _doubleTapX > _playerWidth / 2
+        ? SeekSide.forward
+        : SeekSide.back;
     setState(() {
       // Keep adding up while you keep tapping the same side.
       if (_rippleSide != side) _rippleSeconds = 0;
@@ -339,10 +341,12 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
     ref.read(autoplayProvider.notifier).setEnabled(enabled);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text('Autoplay is ${enabled ? 'on' : 'off'}'),
-        duration: const Duration(seconds: 2),
-      ));
+      ..showSnackBar(
+        SnackBar(
+          content: Text('Autoplay is ${enabled ? 'on' : 'off'}'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     _scheduleHide();
   }
 
@@ -373,77 +377,77 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
 
             // Mini player / dragging: nothing else.
             if (!_view.compact) ...[
-            // 2. Taps on the video: tap = show/hide controls,
-            //    double-tap left/right = seek -10s/+10s.
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _toggleControls,
-              onDoubleTapDown: (details) =>
-                  _doubleTapX = details.localPosition.dx,
-              onDoubleTap: _onDoubleTap,
-            ),
-
-            // 3. Buffering spinner.
-            IgnorePointer(
-              child: ValueListenableBuilder<VideoPlayerValue>(
-                valueListenable: _controller,
-                builder: (context, v, _) => v.isBuffering && !_ended
-                    ? const Center(child: _Spinner())
-                    : const SizedBox.shrink(),
+              // 2. Taps on the video: tap = show/hide controls,
+              //    double-tap left/right = seek -10s/+10s.
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _toggleControls,
+                onDoubleTapDown: (details) =>
+                    _doubleTapX = details.localPosition.dx,
+                onDoubleTap: _onDoubleTap,
               ),
-            ),
 
-            // 4. "10 seconds" ripple.
-            if (_rippleSide != null)
+              // 3. Buffering spinner.
               IgnorePointer(
-                child: SeekRipple(
-                  side: _rippleSide!,
-                  seconds: _rippleSeconds,
-                  pulse: _ripplePulse,
+                child: ValueListenableBuilder<VideoPlayerValue>(
+                  valueListenable: _controller,
+                  builder: (context, v, _) => v.isBuffering && !_ended
+                      ? const Center(child: _Spinner())
+                      : const SizedBox.shrink(),
                 ),
               ),
 
-            // 5. The controls (fade in/out).
-            IgnorePointer(
-              ignoring: !_controlsVisible,
-              child: AnimatedOpacity(
-                opacity: _controlsVisible ? 1 : 0,
-                duration: const Duration(milliseconds: 200),
-                child: _buildControls(muted: muted, autoplay: autoplay),
-              ),
-            ),
+              // 4. "10 seconds" ripple.
+              if (_rippleSide != null)
+                IgnorePointer(
+                  child: SeekRipple(
+                    side: _rippleSide!,
+                    seconds: _rippleSeconds,
+                    pulse: _ripplePulse,
+                  ),
+                ),
 
-            // 6. Thin red line at the bottom while the controls are hidden.
-            if (!_controlsVisible)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                height: 2,
-                child: PlayerProgressBar(
-                  controller: _controller,
-                  interactive: false,
+              // 5. The controls (fade in/out).
+              IgnorePointer(
+                ignoring: !_controlsVisible,
+                child: AnimatedOpacity(
+                  opacity: _controlsVisible ? 1 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: _buildControls(muted: muted, autoplay: autoplay),
                 ),
               ),
 
-            // 7. "Tap to unmute" (Chrome makes videos start muted).
-            if (muted && !_controlsVisible && !showUpNext)
-              Positioned(
-                top: 10,
-                left: 10,
-                child: _UnmutePill(
-                  onTap: () =>
-                      ref.read(playerMutedProvider.notifier).setMuted(false),
+              // 6. Thin red line at the bottom while the controls are hidden.
+              if (!_controlsVisible)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: 2,
+                  child: PlayerProgressBar(
+                    controller: _controller,
+                    interactive: false,
+                  ),
                 ),
-              ),
 
-            // 8. "Up next" countdown when the video ends.
-            if (showUpNext)
-              UpNextOverlay(
-                next: upNext,
-                onPlayNow: _view.onNext,
-                onCancel: () => setState(() => _countdownCancelled = true),
-              ),
+              // 7. "Tap to unmute" (Chrome makes videos start muted).
+              if (muted && !_controlsVisible && !showUpNext)
+                Positioned(
+                  top: 10,
+                  left: 10,
+                  child: _UnmutePill(
+                    onTap: () =>
+                        ref.read(playerMutedProvider.notifier).setMuted(false),
+                  ),
+                ),
+
+              // 8. "Up next" countdown when the video ends.
+              if (showUpNext)
+                UpNextOverlay(
+                  next: upNext,
+                  onPlayNow: _view.onNext,
+                  onCancel: () => setState(() => _countdownCancelled = true),
+                ),
             ],
           ],
         );
@@ -494,8 +498,10 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
                 tooltip: 'Playback speed',
                 onPressed: () {
                   _hideTimer?.cancel();
-                  showPlaybackSpeedSheet(context, ref)
-                      .then((_) => _scheduleHide());
+                  showPlaybackSpeedSheet(
+                    context,
+                    ref,
+                  ).then((_) => _scheduleHide());
                 },
                 icon: const Icon(Symbols.settings, color: white),
               ),
@@ -559,7 +565,9 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
               ),
               const Spacer(),
               IconButton(
-                tooltip: _view.isFullscreen ? 'Exit full screen' : 'Full screen',
+                tooltip: _view.isFullscreen
+                    ? 'Exit full screen'
+                    : 'Full screen',
                 onPressed: _view.onToggleFullscreen,
                 icon: Icon(
                   _view.isFullscreen
@@ -645,8 +653,7 @@ class _AutoplaySwitch extends StatelessWidget {
               ),
               AnimatedAlign(
                 duration: const Duration(milliseconds: 150),
-                alignment:
-                    value ? Alignment.centerRight : Alignment.centerLeft,
+                alignment: value ? Alignment.centerRight : Alignment.centerLeft,
                 child: Container(
                   width: 20,
                   height: 20,

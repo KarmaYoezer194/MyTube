@@ -82,12 +82,24 @@ class SeekRipple extends StatelessWidget {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Symbols.play_arrow,
-                            fill: 1, color: Colors.white70, size: 18),
-                        Icon(Symbols.play_arrow,
-                            fill: 1, color: Colors.white, size: 18),
-                        Icon(Symbols.play_arrow,
-                            fill: 1, color: Colors.white70, size: 18),
+                        Icon(
+                          Symbols.play_arrow,
+                          fill: 1,
+                          color: Colors.white70,
+                          size: 18,
+                        ),
+                        Icon(
+                          Symbols.play_arrow,
+                          fill: 1,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                        Icon(
+                          Symbols.play_arrow,
+                          fill: 1,
+                          color: Colors.white70,
+                          size: 18,
+                        ),
                       ],
                     ),
                   ),

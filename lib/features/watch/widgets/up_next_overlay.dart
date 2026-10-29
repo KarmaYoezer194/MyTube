@@ -24,14 +24,12 @@ class UpNextOverlay extends StatefulWidget {
 
 class _UpNextOverlayState extends State<UpNextOverlay>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _countdown = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 5),
-  )
-    ..addStatusListener((status) {
-      if (status == AnimationStatus.completed) widget.onPlayNow();
-    })
-    ..forward();
+  late final AnimationController _countdown =
+      AnimationController(vsync: this, duration: const Duration(seconds: 5))
+        ..addStatusListener((status) {
+          if (status == AnimationStatus.completed) widget.onPlayNow();
+        })
+        ..forward();
 
   @override
   void dispose() {
@@ -88,8 +86,12 @@ class _UpNextOverlayState extends State<UpNextOverlay>
                           backgroundColor: Colors.white24,
                         ),
                       ),
-                      const Icon(Symbols.play_arrow,
-                          fill: 1, color: Colors.white, size: 32),
+                      const Icon(
+                        Symbols.play_arrow,
+                        fill: 1,
+                        color: Colors.white,
+                        size: 32,
+                      ),
                     ],
                   ),
                 ),

@@ -63,8 +63,9 @@ class VideoCard extends ConsumerWidget {
                         video.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.videoTitle
-                            .copyWith(color: colors.textPrimary),
+                        style: AppTextStyles.videoTitle.copyWith(
+                          color: colors.textPrimary,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -72,8 +73,9 @@ class VideoCard extends ConsumerWidget {
                         ' · ${timeAgo(video.createdAt)}',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.meta
-                            .copyWith(color: colors.textSecondary),
+                        style: AppTextStyles.meta.copyWith(
+                          color: colors.textSecondary,
+                        ),
                       ),
                     ],
                   ),

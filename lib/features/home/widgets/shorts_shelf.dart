@@ -44,8 +44,9 @@ class ShortsShelf extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   'Shorts',
-                  style: AppTextStyles.sectionHeader
-                      .copyWith(color: colors.textPrimary),
+                  style: AppTextStyles.sectionHeader.copyWith(
+                    color: colors.textPrimary,
+                  ),
                 ),
               ],
             ),
@@ -109,8 +110,12 @@ class _ShortCard extends StatelessWidget {
               const Positioned(
                 top: 6,
                 right: 2,
-                child: Icon(Symbols.more_vert,
-                    color: Colors.white, size: 20, shadows: _shadow),
+                child: Icon(
+                  Symbols.more_vert,
+                  color: Colors.white,
+                  size: 20,
+                  shadows: _shadow,
+                ),
               ),
               Positioned(
                 left: 10,

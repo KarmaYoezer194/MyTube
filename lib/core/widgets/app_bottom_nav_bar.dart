@@ -21,6 +21,7 @@ class AppBottomNavBar extends StatelessWidget {
     required this.selectedIndex,
     required this.onTap,
     this.forceDark = false,
+    this.youAvatar,
   });
 
   /// Index of the selected item (0..4). The Create button (2) is never
@@ -29,7 +30,12 @@ class AppBottomNavBar extends StatelessWidget {
   final ValueChanged<int> onTap;
   final bool forceDark;
 
+  /// When signed in: your small avatar replaces the "You" icon (like
+  /// YouTube). null for guests (the normal person icon).
+  final Widget? youAvatar;
+
   static const int createIndex = 2;
+  static const int youIndex = 4;
   static const double height = 52;
 
   /// The real height on screen, including the phone's bottom safe area
@@ -69,6 +75,7 @@ class AppBottomNavBar extends StatelessWidget {
                       selected: i == selectedIndex,
                       colors: colors,
                       onTap: () => onTap(i),
+                      avatar: i == youIndex ? youAvatar : null,
                     ),
             ),
         ],
@@ -83,12 +90,16 @@ class _NavItem extends StatelessWidget {
     required this.selected,
     required this.colors,
     required this.onTap,
+    this.avatar,
   });
 
   final _NavItemData data;
   final bool selected;
   final AppColors colors;
   final VoidCallback onTap;
+
+  /// Shown instead of the icon (the "You" item when signed in).
+  final Widget? avatar;
 
   @override
   Widget build(BuildContext context) {
@@ -98,17 +109,34 @@ class _NavItem extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Animates the icon "fill" from 0 (outlined) to 1 (filled).
-          TweenAnimationBuilder<double>(
-            tween: Tween(end: selected ? 1 : 0),
-            duration: const Duration(milliseconds: 200),
-            builder: (context, fill, _) => Icon(
-              data.icon,
-              fill: fill,
-              size: 24,
-              color: colors.textPrimary,
+          if (avatar != null)
+            // Your avatar, with a ring around it when the tab is selected.
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 26,
+              height: 26,
+              padding: const EdgeInsets.all(1.5),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? colors.textPrimary : Colors.transparent,
+                  width: 1.5,
+                ),
+              ),
+              child: FittedBox(child: avatar),
+            )
+          else
+            // Animates the icon "fill" from 0 (outlined) to 1 (filled).
+            TweenAnimationBuilder<double>(
+              tween: Tween(end: selected ? 1 : 0),
+              duration: const Duration(milliseconds: 200),
+              builder: (context, fill, _) => Icon(
+                data.icon,
+                fill: fill,
+                size: 24,
+                color: colors.textPrimary,
+              ),
             ),
-          ),
           const SizedBox(height: 2),
           Text(
             data.label,

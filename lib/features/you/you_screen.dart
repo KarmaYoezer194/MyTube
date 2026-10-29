@@ -8,22 +8,30 @@ import '../../core/theme/text_styles.dart';
 import '../../core/widgets/channel_avatar.dart';
 import '../../core/widgets/compact_video_row.dart';
 import '../../core/widgets/duration_badge.dart';
-import '../../core/widgets/ensure_profile.dart';
 import '../../core/widgets/network_thumbnail.dart';
 import '../../core/widgets/skeleton.dart';
 import '../../data/models/video.dart';
+import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/user_repository.dart';
+import '../auth/sign_in_screen.dart';
 import '../mini_player/player_panel_provider.dart';
 import '../upload/create_sheet.dart';
 import 'you_providers.dart';
 
-/// You tab: your profile, History, Playlists (Liked videos, Watch later)
-/// and Your videos. The ⚙ opens Settings.
+/// You tab.
+///
+/// - Guest: "You're not signed in" + Sign in button, and History (guests
+///   have a watch history too).
+/// - Signed in: avatar, name, @handle, email, History, Playlists (Liked
+///   videos, Watch later) and Your videos.
+///
+/// The ⚙ opens Settings (with Sign out).
 class YouScreen extends ConsumerWidget {
   const YouScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final signedIn = ref.watch(isSignedInProvider);
     final history = ref.watch(historyVideosProvider);
     final liked = ref.watch(likedVideosProvider);
     final watchLater = ref.watch(watchLaterVideosProvider);
@@ -69,67 +77,70 @@ class YouScreen extends ConsumerWidget {
                       itemCount: items.length.clamp(0, 10),
                       separatorBuilder: (context, index) =>
                           const SizedBox(width: 10),
-                      itemBuilder: (context, index) => _HistoryCard(
-                        item: items[index],
-                      ),
+                      itemBuilder: (context, index) =>
+                          _HistoryCard(item: items[index]),
                     ),
             ),
           ),
           const SizedBox(height: 12),
 
-          // ---- Playlists ----
-          const _SectionHeader(title: 'Playlists'),
-          SizedBox(
-            height: 150,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              children: [
-                _PlaylistCard(
-                  title: 'Liked videos',
-                  icon: Symbols.thumb_up,
-                  items: liked.value,
-                  onTap: () => context.push('/you/liked'),
-                ),
-                const SizedBox(width: 10),
-                _PlaylistCard(
-                  title: 'Watch later',
-                  icon: Symbols.schedule,
-                  items: watchLater.value,
-                  onTap: () => context.push('/you/watch-later'),
-                ),
+          // Liked videos, Watch later and uploads need an account.
+          if (signedIn) ...[
+            // ---- Playlists ----
+            const _SectionHeader(title: 'Playlists'),
+            SizedBox(
+              height: 150,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                children: [
+                  _PlaylistCard(
+                    title: 'Liked videos',
+                    icon: Symbols.thumb_up,
+                    items: liked.value,
+                    onTap: () => context.push('/you/liked'),
+                  ),
+                  const SizedBox(width: 10),
+                  _PlaylistCard(
+                    title: 'Watch later',
+                    icon: Symbols.schedule,
+                    items: watchLater.value,
+                    onTap: () => context.push('/you/watch-later'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // ---- Your videos ----
+            _SectionHeader(
+              title: 'Your videos',
+              onViewAll: (mine.value?.isNotEmpty ?? false)
+                  ? () => context.push('/you/videos')
+                  : null,
+            ),
+            ...mine.when(
+              loading: () => const [CompactVideoRowSkeleton()],
+              error: (error, stackTrace) => const [
+                _RowMessage("Couldn't load your videos."),
               ],
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // ---- Your videos ----
-          _SectionHeader(
-            title: 'Your videos',
-            onViewAll: (mine.value?.isNotEmpty ?? false)
-                ? () => context.push('/you/videos')
-                : null,
-          ),
-          ...mine.when(
-            loading: () => const [CompactVideoRowSkeleton()],
-            error: (error, stackTrace) =>
-                const [_RowMessage("Couldn't load your videos.")],
-            data: (items) => items.isEmpty
-                ? [
-                    ListTile(
-                      leading: const Icon(Symbols.upload),
-                      title: const Text('Upload your first video'),
-                      onTap: () => showCreateSheet(context, ref),
-                    ),
-                  ]
-                : [
-                    for (final item in items.take(3))
-                      CompactVideoRow(
-                        key: ValueKey(item.video.id),
-                        video: item.video,
+              data: (items) => items.isEmpty
+                  ? [
+                      ListTile(
+                        leading: const Icon(Symbols.upload),
+                        title: const Text('Upload your first video'),
+                        onTap: () => showCreateSheet(context, ref),
                       ),
-                  ],
-          ),
+                    ]
+                  : [
+                      for (final item in items.take(3))
+                        CompactVideoRow(
+                          key: ValueKey(item.video.id),
+                          video: item.video,
+                        ),
+                    ],
+            ),
+          ],
           const Divider(height: 32),
 
           // ---- Settings shortcut ----
@@ -144,73 +155,142 @@ class YouScreen extends ConsumerWidget {
   }
 }
 
-/// Avatar, name, @handle and "View channel".
+/// The top of the You tab: signed-out or signed-in version.
 class _ProfileHeader extends ConsumerWidget {
   const _ProfileHeader();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    return ref.watch(isSignedInProvider)
+        ? const _SignedInHeader()
+        : const _SignedOutHeader();
+  }
+}
+
+/// YouTube's signed-out layout: grey avatar, what signing in gives you,
+/// and a Sign in pill.
+class _SignedOutHeader extends StatelessWidget {
+  const _SignedOutHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const ChannelAvatar(name: '', size: 64),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "You're not signed in",
+                      style: AppTextStyles.sectionHeader.copyWith(
+                        color: colors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Sign in to like videos, comment, subscribe and '
+                      'upload.',
+                      style: AppTextStyles.meta.copyWith(
+                        color: colors.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: () => openSignIn(context),
+            icon: const Icon(Symbols.account_circle),
+            label: const Text('Sign in'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Avatar, name, @handle · View channel, and email.
+/// Updates by itself the moment you sign in or change account.
+class _SignedInHeader extends ConsumerWidget {
+  const _SignedInHeader();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
     final profile = ref.watch(myProfileProvider).value;
+    final user = ref.watch(authUserProvider).value;
+    // Right after signing up, the profile can take a moment to arrive:
+    // use the account's own name / email meanwhile.
+    final name =
+        profile?.displayName ??
+        user?.displayName ??
+        user?.email?.split('@').first ??
+        '';
+    final meta = AppTextStyles.meta.copyWith(
+      color: colors.textSecondary,
+      fontSize: 13,
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
           ChannelAvatar(
-            name: profile?.displayName ?? '',
+            name: name,
             imageUrl: profile?.avatarUrl ?? '',
+            color: profile?.avatarColorValue,
             size: 64,
           ),
           const SizedBox(width: 16),
           Expanded(
-            child: profile == null
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Guest',
-                        style: AppTextStyles.sectionHeader
-                            .copyWith(color: colors.textPrimary),
-                      ),
-                      TextButton(
-                        style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                        onPressed: () => ensureProfile(context, ref),
-                        child: const Text('Choose your name'),
-                      ),
-                    ],
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        profile.displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.sectionHeader
-                            .copyWith(fontSize: 24, color: colors.textPrimary),
-                      ),
-                      const SizedBox(height: 2),
-                      GestureDetector(
-                        onTap: () => context.push('/you/videos'),
-                        child: Text.rich(
-                          TextSpan(
-                            text: '${profile.handle} · ',
-                            children: [
-                              TextSpan(
-                                text: 'View channel ›',
-                                style: TextStyle(color: colors.textPrimary),
-                              ),
-                            ],
-                          ),
-                          style: AppTextStyles.meta.copyWith(
-                            color: colors.textSecondary,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.sectionHeader.copyWith(
+                    fontSize: 24,
+                    color: colors.textPrimary,
                   ),
+                ),
+                const SizedBox(height: 2),
+                GestureDetector(
+                  onTap: () => context.push('/you/videos'),
+                  child: Text.rich(
+                    TextSpan(
+                      text: profile == null ? '' : '${profile.handle} · ',
+                      children: [
+                        TextSpan(
+                          text: 'View channel ›',
+                          style: TextStyle(color: colors.textPrimary),
+                        ),
+                      ],
+                    ),
+                    style: meta,
+                  ),
+                ),
+                if (user?.email != null)
+                  Text(
+                    user!.email!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: meta,
+                  ),
+              ],
+            ),
           ),
         ],
       ),
@@ -234,8 +314,10 @@ class _SectionHeader extends StatelessWidget {
           Expanded(
             child: Text(
               title,
-              style: AppTextStyles.sectionHeader
-                  .copyWith(fontSize: 18, color: colors.textPrimary),
+              style: AppTextStyles.sectionHeader.copyWith(
+                fontSize: 18,
+                color: colors.textPrimary,
+              ),
             ),
           ),
           if (onViewAll != null)
@@ -310,8 +392,10 @@ class _HistoryCard extends ConsumerWidget {
               video.title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.videoTitle
-                  .copyWith(fontSize: 13, color: colors.textPrimary),
+              style: AppTextStyles.videoTitle.copyWith(
+                fontSize: 13,
+                color: colors.textPrimary,
+              ),
             ),
             Text(
               video.channelName,
@@ -382,15 +466,17 @@ class _PlaylistCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               title,
-              style: AppTextStyles.videoTitle
-                  .copyWith(fontSize: 13, color: colors.textPrimary),
+              style: AppTextStyles.videoTitle.copyWith(
+                fontSize: 13,
+                color: colors.textPrimary,
+              ),
             ),
             Text(
               count == null
                   ? ''
                   : count == 1
-                      ? '1 video'
-                      : '$count videos',
+                  ? '1 video'
+                  : '$count videos',
               style: AppTextStyles.meta.copyWith(color: colors.textSecondary),
             ),
           ],
@@ -436,10 +522,7 @@ class _CardRowSkeleton extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AspectRatio(
-                aspectRatio: 16 / 9,
-                child: SkeletonBox(radius: 12),
-              ),
+              AspectRatio(aspectRatio: 16 / 9, child: SkeletonBox(radius: 12)),
               SizedBox(height: 6),
               SkeletonBox(width: 130, height: 12),
               SizedBox(height: 4),

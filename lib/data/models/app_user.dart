@@ -1,10 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
+import '../../core/theme/avatar_colors.dart';
 
 /// A user profile, stored at `users/{uid}`.
 ///
-/// Everyone is signed in anonymously. This document is only created the
-/// first time someone comments or uploads (that's when we ask for a name).
+/// Only people with a real account (email or Google) have one. It is
+/// created when they sign up / sign in. Guests (anonymous users) don't.
 @immutable
 class AppUser {
   const AppUser({
@@ -12,31 +14,38 @@ class AppUser {
     required this.displayName,
     required this.handle,
     required this.avatarUrl,
+    required this.avatarColor,
     required this.createdAt,
   });
 
   final String uid;
   final String displayName;
 
-  /// Like "@karma-1234".
+  /// Like "@karmayoezer4821".
   final String handle;
 
   /// Empty string means "no picture": we show a colored letter avatar.
   final String avatarUrl;
 
+  /// Color of the letter avatar, saved as a number (e.g. 0xFFD81B60).
+  final int avatarColor;
+
   final DateTime createdAt;
 
-  /// First letter of the name, for the letter avatar.
-  String get initial =>
-      displayName.trim().isEmpty ? '?' : displayName.trim()[0].toUpperCase();
+  Color get avatarColorValue => Color(avatarColor);
 
   factory AppUser.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? const <String, dynamic>{};
+    final name = data['displayName'] as String? ?? '';
     return AppUser(
       uid: doc.id,
-      displayName: data['displayName'] as String? ?? '',
+      displayName: name,
       handle: data['handle'] as String? ?? '',
       avatarUrl: data['avatarUrl'] as String? ?? '',
+      // Older profiles have no avatarColor yet: use the name's color.
+      avatarColor:
+          (data['avatarColor'] as num?)?.toInt() ??
+          avatarColorFor(name).toARGB32(),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
@@ -46,6 +55,7 @@ class AppUser {
       'displayName': displayName,
       'handle': handle,
       'avatarUrl': avatarUrl,
+      'avatarColor': avatarColor,
       'createdAt': Timestamp.fromDate(createdAt),
     };
   }

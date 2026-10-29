@@ -65,8 +65,8 @@ class CompactVideoRow extends ConsumerWidget {
                       child: video.isShort
                           ? const _ShortsBadge()
                           : (video.durationSeconds > 0
-                              ? DurationBadge(duration: video.duration)
-                              : const SizedBox.shrink()),
+                                ? DurationBadge(duration: video.duration)
+                                : const SizedBox.shrink()),
                     ),
                     if (progress != null)
                       Positioned(
@@ -92,8 +92,10 @@ class CompactVideoRow extends ConsumerWidget {
                     video.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.videoTitle
-                        .copyWith(fontSize: 14, color: colors.textPrimary),
+                    style: AppTextStyles.videoTitle.copyWith(
+                      fontSize: 14,
+                      color: colors.textPrimary,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(

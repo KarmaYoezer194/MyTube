@@ -17,9 +17,12 @@ class RecentSearchesController extends Notifier<List<String>> {
     final q = query.trim();
     if (q.isEmpty) return;
     // Move it to the top if it was already there.
-    _save([q, ...state.where((s) => s.toLowerCase() != q.toLowerCase())]
-        .take(_max)
-        .toList());
+    _save(
+      [
+        q,
+        ...state.where((s) => s.toLowerCase() != q.toLowerCase()),
+      ].take(_max).toList(),
+    );
   }
 
   void remove(String query) => _save(state.where((s) => s != query).toList());
@@ -32,8 +35,8 @@ class RecentSearchesController extends Notifier<List<String>> {
 
 final recentSearchesProvider =
     NotifierProvider<RecentSearchesController, List<String>>(
-  RecentSearchesController.new,
-);
+      RecentSearchesController.new,
+    );
 
 /// Up to 8 video titles / channel names containing what you typed.
 List<String> searchSuggestions(List<Video> videos, String typed) {

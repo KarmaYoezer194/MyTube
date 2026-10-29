@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/providers/shared_preferences_provider.dart';
 import 'core/router/app_router.dart';
+import 'core/security/app_check.dart';
 import 'core/theme/app_scroll_behavior.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/phone_frame.dart';
@@ -32,6 +33,11 @@ Future<void> main() async {
     );
     log('Firebase ready');
 
+    // App Check: proves requests come from this app. Must start before
+    // anything talks to Firestore or Auth. See docs/SECURITY_SETUP.md.
+    final appCheck = await activateAppCheck();
+    log('App Check: ${appCheck.name}');
+
     // Some networks (e.g. university Wi-Fi) break Firestore's normal
     // streaming connection in Chrome (QUIC_NETWORK_IDLE_TIMEOUT / 400 errors
     // in the console). This lets Firestore switch to plain HTTP requests
@@ -40,8 +46,9 @@ Future<void> main() async {
     // can't be changed any more; that's fine, so the error is ignored.)
     if (kIsWeb) {
       try {
-        FirebaseFirestore.instance.settings =
-            const Settings(webExperimentalAutoDetectLongPolling: true);
+        FirebaseFirestore.instance.settings = const Settings(
+          webExperimentalAutoDetectLongPolling: true,
+        );
       } catch (error) {
         debugPrint('Firestore settings not changed: $error');
       }

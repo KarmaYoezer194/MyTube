@@ -101,5 +101,5 @@ class PlayerPanelController extends Notifier<PlayerPanelState> {
 
 final playerPanelProvider =
     NotifierProvider<PlayerPanelController, PlayerPanelState>(
-  PlayerPanelController.new,
-);
+      PlayerPanelController.new,
+    );

@@ -24,10 +24,12 @@ class CategoryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final background =
-        selected ? colors.chipSelectedBackground : colors.surface;
-    final foreground =
-        selected ? colors.chipSelectedForeground : colors.textPrimary;
+    final background = selected
+        ? colors.chipSelectedBackground
+        : colors.surface;
+    final foreground = selected
+        ? colors.chipSelectedForeground
+        : colors.textPrimary;
 
     return GestureDetector(
       onTap: onTap,

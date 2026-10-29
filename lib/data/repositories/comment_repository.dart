@@ -21,9 +21,9 @@ class CommentRepository {
   /// app, so a comment you just posted shows up immediately, even before
   /// the server has given it a time.
   Stream<List<Comment>> watchComments(String videoId) {
-    return _comments(videoId)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map(Comment.fromFirestore).toList());
+    return _comments(videoId).snapshots().map(
+      (snapshot) => snapshot.docs.map(Comment.fromFirestore).toList(),
+    );
   }
 
   /// Posts a comment. Firestore shows it in the stream right away (before
@@ -67,9 +67,11 @@ class CommentRepository {
         .collection('commentLikes')
         .where('videoId', isEqualTo: videoId)
         .snapshots()
-        .map((snapshot) => {
-              for (final doc in snapshot.docs) doc.data()['commentId'] as String,
-            });
+        .map(
+          (snapshot) => {
+            for (final doc in snapshot.docs) doc.data()['commentId'] as String,
+          },
+        );
   }
 
   /// Like / unlike a comment. My "like" and the comment's counter change
@@ -106,8 +108,7 @@ final commentRepositoryProvider = Provider<CommentRepository>(
 
 /// Live comments of a video (not sorted).
 final commentsProvider = StreamProvider.family<List<Comment>, String>(
-  (ref, videoId) =>
-      ref.watch(commentRepositoryProvider).watchComments(videoId),
+  (ref, videoId) => ref.watch(commentRepositoryProvider).watchComments(videoId),
 );
 
 /// Ids of the comments on this video that I liked.

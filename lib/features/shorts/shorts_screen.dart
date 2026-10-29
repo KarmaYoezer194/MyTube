@@ -163,8 +163,9 @@ class _ShortsScreenState extends ConsumerState<ShortsScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: GestureDetector(
-                      onTap: () =>
-                          ref.read(playerMutedProvider.notifier).setMuted(false),
+                      onTap: () => ref
+                          .read(playerMutedProvider.notifier)
+                          .setMuted(false),
                       child: Container(
                         padding: const EdgeInsets.fromLTRB(8, 6, 12, 6),
                         decoration: BoxDecoration(
@@ -174,8 +175,11 @@ class _ShortsScreenState extends ConsumerState<ShortsScreen> {
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Symbols.volume_off,
-                                size: 18, color: Colors.black),
+                            Icon(
+                              Symbols.volume_off,
+                              size: 18,
+                              color: Colors.black,
+                            ),
                             SizedBox(width: 6),
                             Text(
                               'Tap to unmute',

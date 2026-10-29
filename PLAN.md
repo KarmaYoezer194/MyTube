@@ -8,7 +8,7 @@ each 🛑 checkpoint.
 
 - [x] ~~**Phase 11.5 — Music**~~ — SKIPPED (user decision, 2026-10-29). Do not build.
 
-- [ ] **Phase 12 — Security**
+- [x] **Phase 12 — Security**
   - Final Firestore rules.
   - Walkthrough to restrict the Cloudinary preset (formats, folder, size/length).
   - App Check with reCAPTCHA v3, plus a debug token for local runs (token never committed).
@@ -88,7 +88,12 @@ the next checkpoint, top to bottom, and tick them off.
 
 Format: `- [ ] (Phase X) What to do — where — why`
 
-_(none yet)_
+- [ ] (Phase 12) Restrict the Cloudinary preset `mytube_unsigned`: asset folder, overwrite off, allowed formats (optional: max size, `du_900`) — console.cloudinary.com → Settings → Upload → Upload presets — so strangers can't upload anything to your account. Steps: `docs/SECURITY_SETUP.md` §1.
+- [ ] (Phase 12) Deploy the rules: `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — the new rules only work after deploying. §2.
+- [ ] (Phase 12) Make a reCAPTCHA v3 key (domain `localhost`) — google.com/recaptcha/admin — needed for App Check. §3a.
+- [ ] (Phase 12) Register the web app in App Check with the reCAPTCHA **secret** key — Firebase console → App Check → Apps — §3b.
+- [ ] (Phase 12) Generate a debug token and paste it (plus the site key) into `app_check.local.json` (git-ignored) — App Check → Apps → ⋮ → Manage debug tokens — §3c.
+- [ ] (Phase 12) Run with `flutter run -d chrome --dart-define-from-file=app_check.local.json`, check "Verified" requests, then click **Enforce** for Cloud Firestore — Firebase console → App Check → APIs — §3d–3e. Only enforce once requests show as verified.
 
 ## Progress log
 
@@ -98,3 +103,26 @@ Newest entry at the bottom.
   .claude/settings.json, .gitignore secrets section). No phase started.
   Phase 11.5 Music skipped by the user. Phase 11 sign-in changes were left
   uncommitted on purpose.
+- 2026-10-29 — **Phase 12 (Security) done.** Final `firestore.rules`: every
+  write is checked field by field (types, lengths, allowed keys, server
+  times); video and comment like counters only move ±1 together with the
+  user's own reaction / commentLike record (`getAfter` checks both ways);
+  uploads must start at 0 views/likes, use the uploader's own channel and
+  profile name, and point to `res.cloudinary.com/hcrar4ku`; comments must
+  use the author's real name/@handle; durationSeconds may only grow (max
+  4 h); seed creates are limited to the 13 seed ids; profiles can't be
+  deleted. App Check (`firebase_app_check`, reCAPTCHA v3 + debug token via
+  `--dart-define-from-file=app_check.local.json`, git-ignored). Upload
+  checks: formats mp4/mov/webm/m4v + jpg/jpeg/png/webp, 50 MB / 5 MB,
+  Shorts ≤ 60 s, videos ≤ 15 min. Walkthrough in `docs/SECURITY_SETUP.md`.
+  Files: firestore.rules, firestore.indexes.json (new), firebase.json,
+  lib/core/security/app_check.dart (new), lib/core/utils/upload_validation.dart
+  (new), lib/main.dart, lib/data/repositories/upload_repository.dart,
+  lib/features/upload/upload_flow.dart + upload_screen.dart,
+  app_check.example.json (new), .gitignore, pubspec.yaml/lock,
+  docs/SECURITY_SETUP.md (new). `dart format` also reformatted ~50 existing
+  files (style only). The uncommitted Phase 11 sign-in files are included
+  in this commit. Tests: test/upload_validation_test.dart,
+  test/app_check_test.dart, test/firestore_rules_test.dart (20 tests).
+  Not done: the rules could not be run in the emulator (no Java on this
+  PC); they get compiled when you deploy them.

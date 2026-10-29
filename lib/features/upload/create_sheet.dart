@@ -3,11 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../auth/require_account.dart';
 import 'upload_flow.dart';
 
 /// Opens the "Create" bottom sheet from the (+) button.
 /// ("Go live" is left out on purpose: live streaming isn't part of the demo.)
-Future<void> showCreateSheet(BuildContext context, WidgetRef ref) {
+///
+/// Guests get the "Sign in to upload" sheet instead. Every way of opening
+/// the Create sheet goes through here, so they're all covered.
+Future<void> showCreateSheet(BuildContext context, WidgetRef ref) async {
+  if (!checkSignedIn(context, ref, reason: SignInReason.upload)) return;
   return showModalBottomSheet<void>(
     context: context,
     builder: (sheetContext) {

@@ -58,7 +58,9 @@ Future<void> showDescriptionSheet(BuildContext context, Video video) {
                         label: 'Likes',
                       ),
                       _Stat(
-                        value: NumberFormat.decimalPattern().format(video.views),
+                        value: NumberFormat.decimalPattern().format(
+                          video.views,
+                        ),
                         label: 'Views',
                       ),
                       _Stat(
@@ -79,8 +81,9 @@ Future<void> showDescriptionSheet(BuildContext context, Video video) {
                       video.description.isEmpty
                           ? 'No description.'
                           : video.description,
-                      style: AppTextStyles.body
-                          .copyWith(color: colors.textPrimary),
+                      style: AppTextStyles.body.copyWith(
+                        color: colors.textPrimary,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -105,8 +108,9 @@ Future<void> showDescriptionSheet(BuildContext context, Video video) {
                             ),
                             Text(
                               formatSubscribers(video.subscriberCount),
-                              style: AppTextStyles.meta
-                                  .copyWith(color: colors.textSecondary),
+                              style: AppTextStyles.meta.copyWith(
+                                color: colors.textSecondary,
+                              ),
                             ),
                           ],
                         ),
@@ -140,7 +144,9 @@ class _Stat extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           label,
-          style: AppTextStyles.meta.copyWith(color: context.colors.textSecondary),
+          style: AppTextStyles.meta.copyWith(
+            color: context.colors.textSecondary,
+          ),
         ),
       ],
     );

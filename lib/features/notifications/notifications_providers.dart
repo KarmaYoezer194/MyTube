@@ -30,30 +30,37 @@ class NotificationsSeenController extends Notifier<DateTime?> {
   void markAllSeen() {
     final now = DateTime.now();
     state = now;
-    ref.read(sharedPreferencesProvider).setInt(_key, now.millisecondsSinceEpoch);
+    ref
+        .read(sharedPreferencesProvider)
+        .setInt(_key, now.millisecondsSinceEpoch);
   }
 }
 
 final notificationsSeenAtProvider =
     NotifierProvider<NotificationsSeenController, DateTime?>(
-  NotificationsSeenController.new,
-);
+      NotificationsSeenController.new,
+    );
 
 /// The 8 newest videos from OTHER channels, turned into notifications.
 /// (There is no real notification server in this demo.)
-final notificationsProvider =
-    Provider<AsyncValue<List<AppNotification>>>((ref) {
+final notificationsProvider = Provider<AsyncValue<List<AppNotification>>>((
+  ref,
+) {
   final myUid = ref.watch(currentUidProvider);
-  return ref.watch(allVideosProvider).whenData(
+  return ref
+      .watch(allVideosProvider)
+      .whenData(
         (videos) => videos
             .where((v) => v.uploaderUid != myUid && !v.isUnlisted)
             .take(8)
-            .map((v) => AppNotification(
-                  video: v,
-                  text: v.isShort
-                      ? '${v.channelName} posted a new Short: ${v.title}'
-                      : '${v.channelName} uploaded: ${v.title}',
-                ))
+            .map(
+              (v) => AppNotification(
+                video: v,
+                text: v.isShort
+                    ? '${v.channelName} posted a new Short: ${v.title}'
+                    : '${v.channelName} uploaded: ${v.title}',
+              ),
+            )
             .toList(),
       );
 });

@@ -23,7 +23,8 @@ class StartupErrorApp extends StatelessWidget {
         body: EmptyState(
           icon: Symbols.cloud_off,
           title: "Couldn't connect to Firebase",
-          message: 'Check your internet connection and that Anonymous '
+          message:
+              'Check your internet connection and that Anonymous '
               'sign-in is enabled in the Firebase Console '
               '(Authentication → Sign-in method).\n\nDetails: $error',
         ),

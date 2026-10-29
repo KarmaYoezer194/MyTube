@@ -68,8 +68,12 @@ final watchLaterVideosProvider = Provider<AsyncValue<List<ListedVideo>>>(
 /// Videos I uploaded, newest first, INCLUDING unlisted ones.
 final myVideosProvider = Provider<AsyncValue<List<ListedVideo>>>((ref) {
   final uid = ref.watch(currentUidProvider);
-  return ref.watch(allVideosProvider).whenData((videos) => [
-        for (final v in videos)
-          if (v.uploaderUid == uid) ListedVideo(v),
-      ]);
+  return ref
+      .watch(allVideosProvider)
+      .whenData(
+        (videos) => [
+          for (final v in videos)
+            if (v.uploaderUid == uid) ListedVideo(v),
+        ],
+      );
 });

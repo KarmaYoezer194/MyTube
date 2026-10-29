@@ -108,8 +108,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             isDense: true,
             filled: true,
             fillColor: colors.surface,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 10,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(20),
               borderSide: BorderSide.none,
@@ -138,9 +140,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ),
               onPressed: () => ScaffoldMessenger.of(context)
                 ..hideCurrentSnackBar()
-                ..showSnackBar(const SnackBar(
-                  content: Text('Voice search is not available in this demo'),
-                )),
+                ..showSnackBar(
+                  const SnackBar(
+                    content: Text('Voice search is not available in this demo'),
+                  ),
+                ),
               icon: const Icon(Symbols.mic),
             ),
           ),
@@ -195,7 +199,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   /// After searching: the matching videos as compact rows.
   Widget _buildResults(String query) {
-    return ref.watch(allVideosProvider).when(
+    return ref
+        .watch(allVideosProvider)
+        .when(
           loading: () => ListView.builder(
             itemCount: 6,
             itemBuilder: (context, index) => const CompactVideoRowSkeleton(),

@@ -59,8 +59,10 @@ const _userAgent = 'MyTubeStudentProject/1.0 (Flutter university demo)';
 
 Future<void> main(List<String> args) async {
   if (cloudinaryCloudName.startsWith('YOUR_')) {
-    stderr.writeln('First put your cloud name in '
-        'lib/core/constants/cloudinary_config.dart');
+    stderr.writeln(
+      'First put your cloud name in '
+      'lib/core/constants/cloudinary_config.dart',
+    );
     exit(1);
   }
 
@@ -71,12 +73,14 @@ Future<void> main(List<String> args) async {
     exit(1);
   }
 
-  final dio = Dio(BaseOptions(
-    headers: {'User-Agent': _userAgent},
-    // Big videos take a while.
-    receiveTimeout: const Duration(minutes: 10),
-    sendTimeout: const Duration(minutes: 10),
-  ));
+  final dio = Dio(
+    BaseOptions(
+      headers: {'User-Agent': _userAgent},
+      // Big videos take a while.
+      receiveTimeout: const Duration(minutes: 10),
+      sendTimeout: const Duration(minutes: 10),
+    ),
+  );
   final endpoint =
       'https://api.cloudinary.com/v1_1/$cloudinaryCloudName/video/upload';
   final tempDir = await Directory.systemTemp.createTemp('mytube_seed_');
@@ -122,8 +126,10 @@ Future<void> main(List<String> args) async {
 
   dio.close();
   await tempDir.delete(recursive: true);
-  stdout.writeln(failures == 0
-      ? '\nDone: ${keys.length} clip(s) are in Cloudinary.'
-      : '\n$failures clip(s) failed. Run the script again with their names '
-          'to retry them.');
+  stdout.writeln(
+    failures == 0
+        ? '\nDone: ${keys.length} clip(s) are in Cloudinary.'
+        : '\n$failures clip(s) failed. Run the script again with their names '
+              'to retry them.',
+  );
 }

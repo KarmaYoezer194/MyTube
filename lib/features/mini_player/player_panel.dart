@@ -153,10 +153,16 @@ class _PlayerPanelState extends ConsumerState<PlayerPanel>
                     ? fullHeight
                     : width * 9 / 16;
                 const miniVideoHeight = kMiniPlayerHeight - 2;
-                final videoHeight =
-                    lerpDouble(fullVideoHeight, miniVideoHeight, t)!;
-                final videoWidth =
-                    lerpDouble(width, miniVideoHeight * 16 / 9, t)!;
+                final videoHeight = lerpDouble(
+                  fullVideoHeight,
+                  miniVideoHeight,
+                  t,
+                )!;
+                final videoWidth = lerpDouble(
+                  width,
+                  miniVideoHeight * 16 / 9,
+                  t,
+                )!;
 
                 // Details fade out fast; mini controls fade in at the end.
                 final detailsOpacity = (1 - t * 2.5).clamp(0.0, 1.0);
@@ -172,7 +178,9 @@ class _PlayerPanelState extends ConsumerState<PlayerPanel>
                       child: GestureDetector(
                         // Lists inside (details, Up next) still scroll
                         // normally: they win the drag over this detector.
-                        onVerticalDragUpdate: _fullscreen ? null : _onDragUpdate,
+                        onVerticalDragUpdate: _fullscreen
+                            ? null
+                            : _onDragUpdate,
                         onVerticalDragEnd: _fullscreen ? null : _onDragEnd,
                         onTap: t == 1 ? _panel.expand : null,
                         child: Material(
@@ -199,9 +207,8 @@ class _PlayerPanelState extends ConsumerState<PlayerPanel>
                                   right: 0,
                                   // Keep the full-page height so the text
                                   // doesn't re-wrap while shrinking.
-                                  height: fullHeight -
-                                      topPadding -
-                                      fullVideoHeight,
+                                  height:
+                                      fullHeight - topPadding - fullVideoHeight,
                                   child: IgnorePointer(
                                     ignoring: t > 0,
                                     child: Opacity(

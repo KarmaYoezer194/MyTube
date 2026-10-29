@@ -41,8 +41,10 @@ Future<void> showPlaybackSpeedSheet(BuildContext context, WidgetRef ref) {
                 leading: option == current
                     ? const Icon(Symbols.check)
                     : const SizedBox(width: 24),
-                title: Text(speedLabel(option),
-                    style: const TextStyle(fontSize: 15)),
+                title: Text(
+                  speedLabel(option),
+                  style: const TextStyle(fontSize: 15),
+                ),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   speed.setSpeed(option);

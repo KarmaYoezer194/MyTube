@@ -14,7 +14,9 @@ String _compact(double value, String suffix) {
   if (value >= 10) return '${value.floor()}$suffix';
   final oneDecimal = (value * 10).floor() / 10;
   final text = oneDecimal == oneDecimal.roundToDouble()
-      ? oneDecimal.toInt().toString() // "1K" instead of "1.0K"
+      ? oneDecimal
+            .toInt()
+            .toString() // "1K" instead of "1.0K"
       : oneDecimal.toStringAsFixed(1);
   return '$text$suffix';
 }

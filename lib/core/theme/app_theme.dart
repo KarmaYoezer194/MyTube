@@ -11,17 +11,18 @@ class AppTheme {
   static ThemeData light() => _build(Brightness.light, AppColors.light);
 
   static ThemeData _build(Brightness brightness, AppColors c) {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.brandRed,
-      brightness: brightness,
-    ).copyWith(
-      primary: AppColors.brandRed,
-      onPrimary: Colors.white,
-      surface: c.background,
-      onSurface: c.textPrimary,
-      onSurfaceVariant: c.textSecondary,
-      outlineVariant: c.divider,
-    );
+    final colorScheme =
+        ColorScheme.fromSeed(
+          seedColor: AppColors.brandRed,
+          brightness: brightness,
+        ).copyWith(
+          primary: AppColors.brandRed,
+          onPrimary: Colors.white,
+          surface: c.background,
+          onSurface: c.textPrimary,
+          onSurfaceVariant: c.textSecondary,
+          outlineVariant: c.divider,
+        );
 
     final baseText = brightness == Brightness.dark
         ? Typography.material2021().white

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -10,6 +11,8 @@ import 'package:video_player/video_player.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/text_styles.dart';
+import '../../core/utils/mp4_length.dart';
+import '../../core/utils/upload_validation.dart';
 import '../../data/models/video.dart';
 import '../../data/repositories/upload_repository.dart';
 import 'upload_flow.dart';
@@ -52,12 +55,15 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   CancelToken? _cancelToken;
 
   /// Small muted preview of the picked video (plays from your computer).
-  late final VideoPlayerController _preview =
-      VideoPlayerController.networkUrl(widget.draft.file.uri);
+  late final VideoPlayerController _preview = VideoPlayerController.networkUrl(
+    widget.draft.file.uri,
+  );
   bool _previewReady = false;
 
-  bool get _busy =>
-      _stage != _Stage.editing && _stage != _Stage.failed;
+  /// Set when the video is too long (e.g. a Short over 60 seconds).
+  String? _lengthProblem;
+
+  bool get _busy => _stage != _Stage.editing && _stage != _Stage.failed;
 
   @override
   void initState() {
@@ -71,7 +77,16 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       await _preview.setVolume(0);
       await _preview.setLooping(true);
       await _preview.play();
-      if (mounted) setState(() => _previewReady = true);
+      final problem = checkVideoLength(
+        seconds: _preview.value.duration.inSeconds,
+        isShort: widget.draft.isShort,
+      );
+      if (mounted) {
+        setState(() {
+          _previewReady = true;
+          _lengthProblem = problem;
+        });
+      }
     } catch (_) {
       // No preview (unusual format) - the upload can still work.
     }
@@ -93,8 +108,9 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     if (file == null) return;
     final size = await file.length() ?? 0;
     if (!mounted) return;
-    if (size > UploadRepository.maxImageBytes) {
-      _showMessage('Please pick a picture under 5 MB.');
+    final problem = checkImageFile(fileName: file.name, sizeBytes: size);
+    if (problem != null) {
+      _showMessage(problem);
       return;
     }
     final bytes = await file.readAsBytes();
@@ -123,6 +139,28 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     });
 
     try {
+      // 0. Check the length before sending anything. The browser's length
+      // can be wrong for some MP4s, so the file itself is read too.
+      final bytes = await draft.file.readAsBytes();
+      final fileSeconds = math.max(
+        mp4LengthSeconds(bytes),
+        _preview.value.isInitialized ? _preview.value.duration.inSeconds : 0,
+      );
+      final lengthProblem = checkVideoLength(
+        seconds: fileSeconds,
+        isShort: draft.isShort,
+      );
+      if (lengthProblem != null) {
+        debugPrint('UPLOAD: refused - $lengthProblem');
+        if (!mounted) return;
+        setState(() {
+          _stage = _Stage.failed;
+          _error = lengthProblem;
+          _lengthProblem = lengthProblem;
+        });
+        return;
+      }
+
       // 1. Custom thumbnail first (small and quick).
       String? thumbnailUrl;
       if (_thumbBytes != null) {
@@ -135,7 +173,6 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
 
       // 2. The video, with progress.
       setState(() => _stage = _Stage.video);
-      final bytes = await draft.file.readAsBytes();
       debugPrint('UPLOAD: sending ${bytes.length} bytes to Cloudinary');
       final uploaded = await repository.uploadVideo(
         bytes: bytes,
@@ -155,42 +192,56 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       debugPrint('UPLOAD: Cloudinary OK -> ${uploaded.secureUrl}');
       setState(() => _stage = _Stage.saving);
       final author = draft.author;
-      final id = await repository.saveVideo(Video(
-        id: '',
-        title: _title.text.trim(),
-        description: _description.text.trim(),
-        videoUrl: uploaded.secureUrl,
-        thumbnailUrl:
-            thumbnailUrl ?? UploadRepository.videoThumbnailUrl(uploaded.publicId),
-        durationSeconds: uploaded.durationSeconds,
-        channelId: 'user-${author.uid}',
-        channelName: author.displayName,
-        channelAvatarUrl: author.avatarUrl,
-        subscriberCount: 0,
-        views: 0,
-        likes: 0,
-        category: _category,
-        isShort: draft.isShort,
-        uploaderUid: author.uid,
-        createdAt: DateTime.now(),
-        visibility: _visibility,
-      ));
+      final id = await repository.saveVideo(
+        Video(
+          id: '',
+          title: _title.text.trim(),
+          description: _description.text.trim(),
+          videoUrl: uploaded.secureUrl,
+          thumbnailUrl:
+              thumbnailUrl ??
+              UploadRepository.videoThumbnailUrl(uploaded.publicId),
+          // Cloudinary's length, or the one read from the file if that's
+          // longer (fragmented MP4s can fool Cloudinary and the browser).
+          durationSeconds: math.max(
+            uploaded.durationSeconds,
+            mp4LengthSeconds(bytes),
+          ),
+          channelId: 'user-${author.uid}',
+          channelName: author.displayName,
+          channelAvatarUrl: author.avatarUrl,
+          subscriberCount: 0,
+          views: 0,
+          likes: 0,
+          category: _category,
+          isShort: draft.isShort,
+          uploaderUid: author.uid,
+          createdAt: DateTime.now(),
+          visibility: _visibility,
+        ),
+      );
 
       // 4. Done!
       debugPrint('UPLOAD: saved in Firestore as videos/$id');
       final unlisted = _visibility == 'unlisted';
-      messenger.showSnackBar(SnackBar(
-        content: Text(unlisted
-            ? "Uploaded as Unlisted: it won't appear on Home or in Shorts."
-            : 'Upload complete!'),
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            unlisted
+                ? "Uploaded as Unlisted: it won't appear on Home or in Shorts."
+                : 'Upload complete!',
+          ),
+        ),
+      );
       // Close this screen, then show where the new video is.
       navigator.pop();
       router.go(draft.isShort && !unlisted ? '/shorts?v=$id' : '/home');
     } on DioException catch (error) {
-      debugPrint('UPLOAD FAILED (network/Cloudinary): ${error.type} '
-          '${error.response?.statusCode} ${error.response?.data} '
-          '${error.message}');
+      debugPrint(
+        'UPLOAD FAILED (network/Cloudinary): ${error.type} '
+        '${error.response?.statusCode} ${error.response?.data} '
+        '${error.message}',
+      );
       if (!mounted) return;
       if (CancelToken.isCancel(error)) {
         setState(() => _stage = _Stage.editing);
@@ -246,7 +297,8 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final draft = widget.draft;
-    final canUpload = !_busy && _title.text.trim().isNotEmpty;
+    final canUpload =
+        !_busy && _title.text.trim().isNotEmpty && _lengthProblem == null;
     final sizeMb = (draft.sizeBytes / (1024 * 1024)).toStringAsFixed(1);
 
     return PopScope(
@@ -298,7 +350,9 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                       color: Colors.black,
                       child: _previewReady
                           ? FittedBox(
-                              fit: draft.isShort ? BoxFit.cover : BoxFit.contain,
+                              fit: draft.isShort
+                                  ? BoxFit.cover
+                                  : BoxFit.contain,
                               clipBehavior: Clip.hardEdge,
                               child: SizedBox(
                                 width: _preview.value.size.width,
@@ -307,14 +361,25 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                               ),
                             )
                           : const Center(
-                              child: Icon(Symbols.movie,
-                                  color: Colors.white54, size: 48),
+                              child: Icon(
+                                Symbols.movie,
+                                color: Colors.white54,
+                                size: 48,
+                              ),
                             ),
                     ),
                   ),
                 ),
               ),
             ),
+            if (_lengthProblem != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _lengthProblem!,
+                textAlign: TextAlign.center,
+                style: AppTextStyles.meta.copyWith(color: AppColors.brandRed),
+              ),
+            ],
             const SizedBox(height: 8),
             Text(
               '${draft.file.name} · $sizeMb MB',
@@ -326,9 +391,13 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
             const SizedBox(height: 20),
 
             // ---- Thumbnail ----
-            Text('Thumbnail',
-                style: TextStyle(
-                    color: colors.textPrimary, fontWeight: FontWeight.w500)),
+            Text(
+              'Thumbnail',
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -343,8 +412,10 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                             color: context.isDarkMode
                                 ? AppColors.placeholderDark
                                 : AppColors.placeholderLight,
-                            child: Icon(Symbols.play_circle,
-                                color: colors.textSecondary),
+                            child: Icon(
+                              Symbols.play_circle,
+                              color: colors.textSecondary,
+                            ),
                           ),
                   ),
                 ),
@@ -357,8 +428,9 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                         _thumbBytes == null
                             ? 'Automatic (a frame from your video)'
                             : 'Your picture',
-                        style: AppTextStyles.meta
-                            .copyWith(color: colors.textSecondary),
+                        style: AppTextStyles.meta.copyWith(
+                          color: colors.textSecondary,
+                        ),
                       ),
                       Wrap(
                         spacing: 4,
@@ -366,16 +438,17 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                           TextButton(
                             onPressed: _busy ? null : _pickThumbnail,
                             child: Text(
-                                _thumbBytes == null ? 'Choose' : 'Change'),
+                              _thumbBytes == null ? 'Choose' : 'Change',
+                            ),
                           ),
                           if (_thumbBytes != null)
                             TextButton(
                               onPressed: _busy
                                   ? null
                                   : () => setState(() {
-                                        _thumbBytes = null;
-                                        _thumbName = null;
-                                      }),
+                                      _thumbBytes = null;
+                                      _thumbName = null;
+                                    }),
                               child: const Text('Remove'),
                             ),
                         ],
@@ -424,15 +497,20 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                 for (final c in uploadCategories)
                   DropdownMenuItem(value: c, child: Text(c)),
               ],
-              onChanged:
-                  _busy ? null : (value) => setState(() => _category = value!),
+              onChanged: _busy
+                  ? null
+                  : (value) => setState(() => _category = value!),
             ),
             const SizedBox(height: 20),
 
             // ---- Visibility ----
-            Text('Visibility',
-                style: TextStyle(
-                    color: colors.textPrimary, fontWeight: FontWeight.w500)),
+            Text(
+              'Visibility',
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
             const SizedBox(height: 8),
             SegmentedButton<String>(
               segments: const [
@@ -451,14 +529,14 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
               onSelectionChanged: _busy
                   ? null
                   : (selection) =>
-                      setState(() => _visibility = selection.first),
+                        setState(() => _visibility = selection.first),
             ),
             const SizedBox(height: 6),
             Text(
               _visibility == 'public'
                   ? 'Everyone can find it on Home, in Shorts and in search.'
                   : "Only people with the link can watch it. It won't show "
-                      'on Home, in Shorts or in search.',
+                        'on Home, in Shorts or in search.',
               style: AppTextStyles.meta.copyWith(color: colors.textSecondary),
             ),
           ],
@@ -514,8 +592,7 @@ class _ProgressPanel extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(label,
-                    style: TextStyle(color: colors.textPrimary)),
+                child: Text(label, style: TextStyle(color: colors.textPrimary)),
               ),
               if (onCancel != null)
                 TextButton(onPressed: onCancel, child: const Text('Cancel')),

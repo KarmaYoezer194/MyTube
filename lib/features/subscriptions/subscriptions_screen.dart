@@ -13,14 +13,12 @@ class SubscriptionsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        titleSpacing: 12,
-        title: const MyTubeLogo(),
-      ),
+      appBar: AppBar(titleSpacing: 12, title: const MyTubeLogo()),
       body: EmptyState(
         icon: Symbols.subscriptions,
         title: 'No subscriptions feed in this demo',
-        message: 'You can still subscribe to channels from the watch page. '
+        message:
+            'You can still subscribe to channels from the watch page. '
             'Explore videos to find something to watch.',
         actionLabel: 'Explore videos',
         onAction: () => context.go('/home'),

@@ -171,8 +171,9 @@ class _NotificationTile extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     timeAgo(notification.time),
-                    style:
-                        AppTextStyles.meta.copyWith(color: colors.textSecondary),
+                    style: AppTextStyles.meta.copyWith(
+                      color: colors.textSecondary,
+                    ),
                   ),
                 ],
               ),
@@ -191,9 +192,13 @@ class _NotificationTile extends StatelessWidget {
               visualDensity: VisualDensity.compact,
               onPressed: () => ScaffoldMessenger.of(context)
                 ..hideCurrentSnackBar()
-                ..showSnackBar(const SnackBar(
-                  content: Text('Notification settings are not part of this demo'),
-                )),
+                ..showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Notification settings are not part of this demo',
+                    ),
+                  ),
+                ),
               icon: const Icon(Symbols.more_vert, size: 20),
             ),
           ],

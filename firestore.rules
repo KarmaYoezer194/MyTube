@@ -1,63 +1,374 @@
 rules_version = '2';
 
-// Simple rules for a student demo:
-// - you must be signed in (anonymous is fine) to read or write anything
-// - you can only change YOUR OWN data
-// - anyone signed in may bump the public counters (views, likes) on a video
+// MyTube security rules (Phase 12: final rules).
+//
+// There is no server (free Spark plan, no Cloud Functions), so the app does
+// the "server" work itself and THESE RULES are what keeps it honest:
+// every write is checked field by field, and counters (likes, views) can
+// only move by one, together with the matching record of who did it.
+//
+// Two kinds of users are always "signed in" to Firebase:
+// - GUESTS: anonymous users, created automatically. They can watch:
+//   read, keep their own watch history, add +1 view, fill in a video length.
+// - ACCOUNTS: signed in with email/password or Google. They can also like,
+//   comment, subscribe, save to Watch later, upload and have a profile.
+//
+// request.auth.token.firebase.sign_in_provider is 'anonymous' for guests
+// and 'password' or 'google.com' for accounts.
+//
+// Anything not allowed below is denied.
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ================= Helpers =================
+
+    // Anyone using the app (guest or account).
     function signedIn() {
       return request.auth != null;
     }
 
+    // A real account, not a guest.
+    function hasAccount() {
+      return signedIn() &&
+        request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    // This is me (guest or account).
     function isMe(uid) {
       return signedIn() && request.auth.uid == uid;
     }
 
-    // Only these fields of a video may be changed by people who
-    // didn't upload it.
-    function onlyChangesCounters() {
-      return request.resource.data.diff(resource.data).affectedKeys()
-        .hasOnly(['views', 'likes', 'durationSeconds']);
+    // This is me AND I have a real account.
+    function isMyAccount(uid) {
+      return hasAccount() && request.auth.uid == uid;
     }
 
-    // ---------- Users ----------
-    match /users/{uid} {
-      allow read: if signedIn();
-      allow write: if isMe(uid);
+    // The fields this update changes.
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
 
-      // reactions, history, watchLater, subscribed: private to the user
-      match /{subcollection}/{docId} {
-        allow read, write: if isMe(uid);
+    // The update changes ONLY these fields.
+    function onlyChanges(fields) {
+      return changedKeys().hasOnly(fields);
+    }
+
+    // This update changes [field].
+    function changes(field) {
+      return field in changedKeys();
+    }
+
+    // A text of [min]..[max] characters.
+    function isText(value, min, max) {
+      return value is string && value.size() >= min && value.size() <= max;
+    }
+
+    // A link to a file in OUR Cloudinary account (cloud 'hcrar4ku').
+    // Uploads may only point there, not to any other website.
+    function isCloudinaryUrl(value) {
+      return value is string && value.size() <= 500 &&
+        value.matches('https://res[.]cloudinary[.]com/hcrar4ku/(video|image)/upload/.+');
+    }
+
+    // Path helpers.
+    function userDoc(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+    function videoDoc(videoId) {
+      return /databases/$(database)/documents/videos/$(videoId);
+    }
+    function commentDoc(videoId, commentId) {
+      return /databases/$(database)/documents/videos/$(videoId)/comments/$(commentId);
+    }
+    function myReactionDoc(videoId) {
+      return /databases/$(database)/documents/users/$(request.auth.uid)/reactions/$(videoId);
+    }
+    function myCommentLikeDoc(videoId, commentId) {
+      return /databases/$(database)/documents/users/$(request.auth.uid)/commentLikes/$(videoId + '_' + commentId);
+    }
+
+    // ---- Video likes <-> my reaction ----
+    // The like counter on a video and my reactions/{videoId} record are
+    // written together in one batch. Before / after that batch:
+    function likedBefore(videoId) {
+      return exists(myReactionDoc(videoId)) &&
+        get(myReactionDoc(videoId)).data.value == 1;
+    }
+    function likedAfter(videoId) {
+      return existsAfter(myReactionDoc(videoId)) &&
+        getAfter(myReactionDoc(videoId)).data.value == 1;
+    }
+
+    // ================= Users =================
+    match /users/{uid} {
+
+      // A valid profile name.
+      function isName(value) {
+        return isText(value, 1, 50);
+      }
+      // "@karmayoezer4821": lower-case letters, digits, '.', '_' or '-'.
+      function isHandle(value) {
+        return value is string && value.matches('@[a-z0-9._-]{3,30}');
+      }
+      // Empty (letter avatar) or a Cloudinary picture.
+      function isAvatarUrl(value) {
+        return value == '' || isCloudinaryUrl(value);
+      }
+      // A color saved as a number, like 0xFFD81B60.
+      function isColor(value) {
+        return value is int && value >= 0 && value <= 4294967295;
+      }
+
+      // Profiles (name, @handle, avatar) are public; only accounts have one.
+      allow read: if signedIn();
+
+      allow create: if isMyAccount(uid) &&
+        request.resource.data.keys().hasOnly(
+          ['displayName', 'handle', 'avatarUrl', 'avatarColor', 'createdAt']) &&
+        request.resource.data.keys().hasAll(
+          ['displayName', 'handle', 'avatarUrl', 'avatarColor', 'createdAt']) &&
+        isName(request.resource.data.displayName) &&
+        isHandle(request.resource.data.handle) &&
+        isAvatarUrl(request.resource.data.avatarUrl) &&
+        isColor(request.resource.data.avatarColor) &&
+        request.resource.data.createdAt == request.time;
+
+      // Older profiles may have an old-style handle; it only has to be
+      // valid when it is CHANGED.
+      allow update: if isMyAccount(uid) &&
+        onlyChanges(['displayName', 'handle', 'avatarUrl', 'avatarColor']) &&
+        (!changes('displayName') || isName(request.resource.data.displayName)) &&
+        (!changes('handle') || isHandle(request.resource.data.handle)) &&
+        (!changes('avatarUrl') || isAvatarUrl(request.resource.data.avatarUrl)) &&
+        (!changes('avatarColor') || isColor(request.resource.data.avatarColor));
+
+      // Profiles are never deleted from the app.
+      allow delete: if false;
+
+      // ---- Watch history (guests have one too) ----
+      // history/{videoId}: watchedAt (server time), positionSeconds.
+      match /history/{videoId} {
+        allow read, delete: if isMe(uid);
+        allow create, update: if isMe(uid) &&
+          request.resource.data.keys().hasOnly(['watchedAt', 'positionSeconds']) &&
+          request.resource.data.watchedAt == request.time &&
+          request.resource.data.positionSeconds is int &&
+          request.resource.data.positionSeconds >= 0 &&
+          request.resource.data.positionSeconds <= 86400;
+      }
+
+      // ---- Likes / dislikes ----
+      // reactions/{videoId}: value (1 = like, -1 = dislike), reactedAt.
+      // The video's like counter must change in the same batch:
+      // +1 when it becomes a like, -1 when a like goes away.
+      match /reactions/{videoId} {
+        function videoLikesFollow() {
+          return !exists(videoDoc(videoId)) ||
+            (likedBefore(videoId) == likedAfter(videoId) &&
+              getAfter(videoDoc(videoId)).data.likes ==
+                get(videoDoc(videoId)).data.likes) ||
+            (!likedBefore(videoId) && likedAfter(videoId) &&
+              getAfter(videoDoc(videoId)).data.likes ==
+                get(videoDoc(videoId)).data.likes + 1) ||
+            (likedBefore(videoId) && !likedAfter(videoId) &&
+              getAfter(videoDoc(videoId)).data.likes ==
+                get(videoDoc(videoId)).data.likes - 1);
+        }
+
+        allow read: if isMe(uid);
+        allow create, update: if isMyAccount(uid) &&
+          request.resource.data.keys().hasOnly(['value', 'reactedAt']) &&
+          request.resource.data.value in [1, -1] &&
+          request.resource.data.reactedAt == request.time &&
+          videoLikesFollow();
+        allow delete: if isMyAccount(uid) && videoLikesFollow();
+      }
+
+      // ---- Watch later ----
+      // watchLater/{videoId}: addedAt.
+      match /watchLater/{videoId} {
+        allow read: if isMe(uid);
+        allow create, update: if isMyAccount(uid) &&
+          request.resource.data.keys().hasOnly(['addedAt']) &&
+          request.resource.data.addedAt == request.time;
+        allow delete: if isMyAccount(uid);
+      }
+
+      // ---- Subscriptions ----
+      // subscribed/{channelId}: addedAt.
+      match /subscribed/{channelId} {
+        allow read: if isMe(uid);
+        allow create, update: if isMyAccount(uid) &&
+          request.resource.data.keys().hasOnly(['addedAt']) &&
+          request.resource.data.addedAt == request.time;
+        allow delete: if isMyAccount(uid);
+      }
+
+      // ---- Comment likes ----
+      // commentLikes/{videoId}_{commentId}: videoId, commentId, likedAt.
+      // The comment's like counter must go +1 (like) / -1 (unlike) in the
+      // same batch.
+      match /commentLikes/{likeId} {
+        function commentLikesChangeBy(videoId, commentId, change) {
+          return getAfter(commentDoc(videoId, commentId)).data.likes ==
+            get(commentDoc(videoId, commentId)).data.likes + change;
+        }
+
+        allow read: if isMe(uid);
+        allow create: if isMyAccount(uid) &&
+          request.resource.data.keys().hasOnly(['videoId', 'commentId', 'likedAt']) &&
+          request.resource.data.videoId is string &&
+          request.resource.data.commentId is string &&
+          likeId == request.resource.data.videoId + '_' + request.resource.data.commentId &&
+          request.resource.data.likedAt == request.time &&
+          commentLikesChangeBy(request.resource.data.videoId,
+            request.resource.data.commentId, 1);
+        allow delete: if isMyAccount(uid) &&
+          (!exists(commentDoc(resource.data.videoId, resource.data.commentId)) ||
+            commentLikesChangeBy(resource.data.videoId, resource.data.commentId, -1));
       }
     }
 
-    // ---------- Videos ----------
+    // ================= Videos =================
+    // videos/{videoId}: title, description, videoUrl, thumbnailUrl,
+    // durationSeconds, channelId, channelName, channelAvatarUrl,
+    // subscriberCount, views, likes, category, isShort, uploaderUid,
+    // createdAt, visibility (+ sampleKey on the 13 seed videos).
     match /videos/{videoId} {
+
+      function isCategory(value) {
+        return value in ['Animation', 'Cars', 'Entertainment', 'Sci-Fi', 'Other'];
+      }
+      function isVisibility(value) {
+        return value in ['public', 'unlisted'];
+      }
+      // Up to 4 hours.
+      function isLength(value) {
+        return value is int && value >= 0 && value <= 14400;
+      }
+
+      // The 13 sample videos. The app writes them on its very first launch
+      // (which may be by a guest), with these exact ids.
+      function isSeedCreate() {
+        let d = request.resource.data;
+        return signedIn() &&
+          videoId in ['big_buck_bunny', 'elephants_dream', 'sintel',
+            'tears_of_steel', 'zeekr_x_review', 'rally_drone_chase',
+            'snow_forest_drive', 'sherp_icebergs', 'bund_fireworks',
+            'fire_juggling', 'vettisfossen_waterfall', 'tgv_passing',
+            'magpies_calling'] &&
+          d.uploaderUid == 'seed' &&
+          d.sampleKey == videoId &&
+          isText(d.title, 1, 100) &&
+          isCategory(d.category) &&
+          d.visibility == 'public';
+      }
+
+      // A new upload by me: starts at 0 views / 0 likes, uses my own
+      // channel and profile name, and points to our Cloudinary account.
+      function isUploadCreate() {
+        let d = request.resource.data;
+        return hasAccount() &&
+          d.keys().hasOnly(['title', 'description', 'videoUrl', 'thumbnailUrl',
+            'durationSeconds', 'channelId', 'channelName', 'channelAvatarUrl',
+            'subscriberCount', 'views', 'likes', 'category', 'isShort',
+            'uploaderUid', 'createdAt', 'visibility']) &&
+          d.uploaderUid == request.auth.uid &&
+          d.channelId == 'user-' + request.auth.uid &&
+          d.channelName == get(userDoc(request.auth.uid)).data.displayName &&
+          isText(d.title, 1, 100) &&
+          isText(d.description, 0, 5000) &&
+          isCloudinaryUrl(d.videoUrl) &&
+          isCloudinaryUrl(d.thumbnailUrl) &&
+          (d.channelAvatarUrl == '' || isCloudinaryUrl(d.channelAvatarUrl)) &&
+          isLength(d.durationSeconds) &&
+          d.subscriberCount == 0 &&
+          d.views == 0 &&
+          d.likes == 0 &&
+          isCategory(d.category) &&
+          d.isShort is bool &&
+          isVisibility(d.visibility) &&
+          d.createdAt is timestamp &&
+          d.createdAt <= request.time + duration.value(5, 'm');
+      }
+
+      // The uploader edits their video's details (not its counters).
+      function isOwnerEdit() {
+        let d = request.resource.data;
+        return isMyAccount(resource.data.uploaderUid) &&
+          onlyChanges(['title', 'description', 'thumbnailUrl', 'category',
+            'visibility', 'channelName', 'channelAvatarUrl']) &&
+          isText(d.title, 1, 100) &&
+          isText(d.description, 0, 5000) &&
+          (!changes('thumbnailUrl') || isCloudinaryUrl(d.thumbnailUrl)) &&
+          (!changes('channelAvatarUrl') || d.channelAvatarUrl == '' ||
+            isCloudinaryUrl(d.channelAvatarUrl)) &&
+          (!changes('channelName') ||
+            d.channelName == get(userDoc(request.auth.uid)).data.displayName) &&
+          isCategory(d.category) &&
+          isVisibility(d.visibility);
+      }
+
       allow read: if signedIn();
 
-      // Your own uploads, plus the seed videos written on first launch.
-      allow create: if signedIn() && (
-        request.resource.data.uploaderUid == request.auth.uid ||
-        request.resource.data.uploaderUid == 'seed'
-      );
+      allow create: if isSeedCreate() || isUploadCreate();
 
-      allow update: if isMe(resource.data.uploaderUid) ||
-        (signedIn() && onlyChangesCounters());
+      allow update: if isOwnerEdit() ||
+        // Anyone watching (guests too): exactly +1 view.
+        (signedIn() && onlyChanges(['views']) &&
+          request.resource.data.views == resource.data.views + 1) ||
+        // Anyone watching: the player saves a LONGER length than the one
+        // saved (a wrong length is always too short), up to 4 hours.
+        (signedIn() && onlyChanges(['durationSeconds']) &&
+          isLength(request.resource.data.durationSeconds) &&
+          request.resource.data.durationSeconds > resource.data.durationSeconds) ||
+        // Liking / un-liking (accounts only): +1 or -1, and only together
+        // with my own reaction record (see users/{uid}/reactions).
+        (hasAccount() && onlyChanges(['likes']) &&
+          ((request.resource.data.likes == resource.data.likes + 1 &&
+              !likedBefore(videoId) && likedAfter(videoId)) ||
+            (request.resource.data.likes == resource.data.likes - 1 &&
+              likedBefore(videoId) && !likedAfter(videoId))));
 
-      allow delete: if isMe(resource.data.uploaderUid);
+      allow delete: if isMyAccount(resource.data.uploaderUid);
 
-      // ---------- Comments ----------
+      // ================= Comments =================
+      // comments/{commentId}: uid, displayName, handle, avatarUrl, text,
+      // likes, createdAt.
       match /comments/{commentId} {
         allow read: if signedIn();
-        allow create: if signedIn() &&
-          request.resource.data.uid == request.auth.uid;
-        // Others may only change the like counter.
-        allow update: if isMe(resource.data.uid) || (signedIn() &&
-          request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['likes']));
-        allow delete: if isMe(resource.data.uid);
+
+        // Posted as ME, with my real profile name and @handle, 0 likes,
+        // server time.
+        allow create: if hasAccount() &&
+          request.resource.data.keys().hasOnly(
+            ['uid', 'displayName', 'handle', 'avatarUrl', 'text', 'likes', 'createdAt']) &&
+          request.resource.data.uid == request.auth.uid &&
+          request.resource.data.displayName ==
+            get(userDoc(request.auth.uid)).data.displayName &&
+          request.resource.data.handle ==
+            get(userDoc(request.auth.uid)).data.handle &&
+          (request.resource.data.avatarUrl == '' ||
+            isCloudinaryUrl(request.resource.data.avatarUrl)) &&
+          isText(request.resource.data.text, 1, 1000) &&
+          request.resource.data.likes == 0 &&
+          request.resource.data.createdAt == request.time;
+
+        allow update: if
+          // The author edits the text.
+          (isMyAccount(resource.data.uid) && onlyChanges(['text']) &&
+            isText(request.resource.data.text, 1, 1000)) ||
+          // Any account likes / unlikes: +1 / -1 together with my own
+          // commentLikes record.
+          (hasAccount() && onlyChanges(['likes']) &&
+            ((request.resource.data.likes == resource.data.likes + 1 &&
+                !exists(myCommentLikeDoc(videoId, commentId)) &&
+                existsAfter(myCommentLikeDoc(videoId, commentId))) ||
+              (request.resource.data.likes == resource.data.likes - 1 &&
+                exists(myCommentLikeDoc(videoId, commentId)) &&
+                !existsAfter(myCommentLikeDoc(videoId, commentId)))));
+
+        allow delete: if isMyAccount(resource.data.uid);
       }
     }
   }

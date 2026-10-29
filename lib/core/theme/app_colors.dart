@@ -113,10 +113,16 @@ class AppColors extends ThemeExtension<AppColors> {
       textPrimary: Color.lerp(textPrimary, other.textPrimary, t)!,
       textSecondary: Color.lerp(textSecondary, other.textSecondary, t)!,
       divider: Color.lerp(divider, other.divider, t)!,
-      chipSelectedBackground:
-          Color.lerp(chipSelectedBackground, other.chipSelectedBackground, t)!,
-      chipSelectedForeground:
-          Color.lerp(chipSelectedForeground, other.chipSelectedForeground, t)!,
+      chipSelectedBackground: Color.lerp(
+        chipSelectedBackground,
+        other.chipSelectedBackground,
+        t,
+      )!,
+      chipSelectedForeground: Color.lerp(
+        chipSelectedForeground,
+        other.chipSelectedForeground,
+        t,
+      )!,
       sheetBackground: Color.lerp(sheetBackground, other.sheetBackground, t)!,
     );
   }

@@ -2,9 +2,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/widgets/ensure_profile.dart';
+import '../auth/require_account.dart';
 import '../../data/models/app_user.dart';
-import '../../data/repositories/upload_repository.dart';
+import '../../core/utils/upload_validation.dart';
 import 'upload_screen.dart';
 
 /// Everything the details screen needs: the picked file, its size, who is
@@ -24,11 +24,12 @@ class UploadDraft {
 }
 
 /// "Upload a video" / "Create a Short":
-/// 1. pick a video file (done first, straight after your tap, because
-///    browsers only open the file picker right after a click)
-/// 2. check it's under 50 MB
-/// 3. make sure you have a name (first upload only)
-/// 4. open the details screen
+/// 1. guests can't upload: check for an account first (no waiting)
+/// 2. pick a video file (straight after your tap, because browsers only
+///    open the file picker right after a click)
+/// 3. check its type and size (see core/utils/upload_validation.dart)
+/// 4. load your profile (name, @handle) for the channel name
+/// 5. open the details screen
 ///
 /// Every step is printed in the `flutter run` terminal / browser console
 /// ("UPLOAD: ...") and any error is shown on screen, never swallowed.
@@ -46,6 +47,11 @@ Future<void> startUpload(
       ..showSnackBar(SnackBar(content: Text(text)));
   }
 
+  if (!checkSignedIn(context, ref, reason: SignInReason.upload)) {
+    debugPrint('UPLOAD: stopped - guests cannot upload');
+    return;
+  }
+
   try {
     debugPrint('UPLOAD: opening the file picker');
     final file = await FilePicker.pickFile(type: FileType.video);
@@ -56,9 +62,10 @@ Future<void> startUpload(
     final size = await file.length() ?? 0;
     debugPrint('UPLOAD: picked ${file.name} ($size bytes)');
 
-    if (size > UploadRepository.maxVideoBytes) {
-      final mb = (size / (1024 * 1024)).toStringAsFixed(0);
-      showMessage('This video is $mb MB. Please pick one under 50 MB.');
+    final problem = checkVideoFile(fileName: file.name, sizeBytes: size);
+    if (problem != null) {
+      debugPrint('UPLOAD: refused - $problem');
+      showMessage(problem);
       return;
     }
 
@@ -66,7 +73,7 @@ Future<void> startUpload(
     showMessage('Preparing ${file.name}...');
 
     if (!context.mounted) return;
-    final author = await ensureProfile(context, ref);
+    final author = await loadMyProfile(context, ref);
     if (author == null) {
       debugPrint('UPLOAD: stopped - no profile');
       return;
@@ -76,17 +83,19 @@ Future<void> startUpload(
 
     // A plain Navigator page (not a go_router address): the picked file
     // can't be put in a web address, so we hand it over directly.
-    await navigator.push(MaterialPageRoute<void>(
-      fullscreenDialog: true,
-      builder: (_) => UploadScreen(
-        draft: UploadDraft(
-          file: file,
-          sizeBytes: size,
-          author: author,
-          isShort: isShort,
+    await navigator.push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => UploadScreen(
+          draft: UploadDraft(
+            file: file,
+            sizeBytes: size,
+            author: author,
+            isShort: isShort,
+          ),
         ),
       ),
-    ));
+    );
   } catch (error, stackTrace) {
     debugPrint('UPLOAD FAILED before the details screen: $error\n$stackTrace');
     showMessage('Upload problem: $error');

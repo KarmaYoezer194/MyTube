@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../data/repositories/user_repository.dart';
+import '../../features/auth/require_account.dart';
 import '../theme/app_colors.dart';
 
 /// YouTube's Subscribe pill.
@@ -34,12 +35,14 @@ class SubscribeButton extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
 
     Future<void> setSubscribed(bool value) {
-      return repository
-          .setSubscribed(channelId, subscribed: value)
-          .catchError((Object _) {
-        messenger.showSnackBar(const SnackBar(
-          content: Text("Couldn't save. Check your internet connection."),
-        ));
+      return repository.setSubscribed(channelId, subscribed: value).catchError((
+        Object _,
+      ) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text("Couldn't save. Check your internet connection."),
+          ),
+        );
       });
     }
 
@@ -63,8 +66,9 @@ class SubscribeButton extends ConsumerWidget {
       if (confirmed ?? false) await setSubscribed(false);
     }
 
-    final foreground =
-        subscribed ? colors.textPrimary : colors.chipSelectedForeground;
+    final foreground = subscribed
+        ? colors.textPrimary
+        : colors.chipSelectedForeground;
 
     return AnimatedContainer(
       duration: _duration,
@@ -78,7 +82,19 @@ class SubscribeButton extends ConsumerWidget {
         type: MaterialType.transparency,
         child: InkWell(
           customBorder: const StadiumBorder(),
-          onTap: subscribed ? confirmUnsubscribe : () => setSubscribed(true),
+          onTap: subscribed
+              ? confirmUnsubscribe
+              : () {
+                  // Guests get the "Sign in to …" sheet instead.
+                  if (!checkSignedIn(
+                    context,
+                    ref,
+                    reason: SignInReason.subscribe,
+                  )) {
+                    return;
+                  }
+                  setSubscribed(true);
+                },
           child: Padding(
             padding: EdgeInsets.symmetric(horizontal: subscribed ? 12 : 16),
             // AnimatedSize smoothly changes the pill's width.
@@ -99,8 +115,11 @@ class SubscribeButton extends ConsumerWidget {
                         key: const ValueKey('subscribed'),
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Symbols.notifications,
-                              size: 20, color: foreground),
+                          Icon(
+                            Symbols.notifications,
+                            size: 20,
+                            color: foreground,
+                          ),
                           const SizedBox(width: 6),
                           Text(
                             'Subscribed',
@@ -111,8 +130,11 @@ class SubscribeButton extends ConsumerWidget {
                             ),
                           ),
                           const SizedBox(width: 2),
-                          Icon(Symbols.keyboard_arrow_down,
-                              size: 18, color: foreground),
+                          Icon(
+                            Symbols.keyboard_arrow_down,
+                            size: 18,
+                            color: foreground,
+                          ),
                         ],
                       )
                     : Center(

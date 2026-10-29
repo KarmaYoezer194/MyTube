@@ -123,8 +123,8 @@ class HomeScreen extends ConsumerWidget {
             onAction: isAll
                 ? null
                 : () => ref
-                    .read(selectedCategoryProvider.notifier)
-                    .select(allCategory),
+                      .read(selectedCategoryProvider.notifier)
+                      .select(allCategory),
           ),
         ),
       ];
@@ -133,8 +133,9 @@ class HomeScreen extends ConsumerWidget {
     // The Shorts shelf only shows on the "All" chip, like on YouTube.
     final shorts = ref.watch(homeShortsProvider);
     final showShelf = category == allCategory && shorts.isNotEmpty;
-    final shelfIndex =
-        videos.length < _shelfPosition ? videos.length : _shelfPosition;
+    final shelfIndex = videos.length < _shelfPosition
+        ? videos.length
+        : _shelfPosition;
 
     final children = <Widget>[];
     for (var i = 0; i <= videos.length; i++) {

@@ -33,10 +33,6 @@ class UploadRepository {
   final FirebaseFirestore _db;
   final Dio _dio;
 
-  /// Keep demo uploads small (Cloudinary free plan allows up to 100 MB).
-  static const int maxVideoBytes = 50 * 1024 * 1024;
-  static const int maxImageBytes = 5 * 1024 * 1024;
-
   static const String _api =
       'https://api.cloudinary.com/v1_1/$cloudinaryCloudName';
 
@@ -101,8 +97,10 @@ class UploadRepository {
     try {
       await doc.set(video.toFirestore()).timeout(const Duration(seconds: 15));
     } on TimeoutException {
-      debugPrint('UPLOAD: Firestore is slow - saved on this device, '
-          'it will sync when the connection recovers.');
+      debugPrint(
+        'UPLOAD: Firestore is slow - saved on this device, '
+        'it will sync when the connection recovers.',
+      );
     }
     return doc.id;
   }

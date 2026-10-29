@@ -5,9 +5,12 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../features/mini_player/player_panel.dart';
 import '../../features/mini_player/player_panel_provider.dart';
+import '../../data/repositories/auth_repository.dart';
+import '../../data/repositories/user_repository.dart';
 import '../../features/upload/create_sheet.dart';
 import '../utils/online_status.dart';
 import 'app_bottom_nav_bar.dart';
+import 'channel_avatar.dart';
 
 /// The frame around the 4 tabs (Home, Shorts, Subscriptions, You).
 ///
@@ -41,6 +44,22 @@ class AppShell extends ConsumerWidget {
       branch,
       // Tapping the tab you are already on goes back to its first page.
       initialLocation: branch == navigationShell.currentIndex,
+    );
+  }
+
+  /// Your small avatar for the "You" tab when signed in (null for guests).
+  /// It updates by itself the moment you sign in, out, or switch account.
+  Widget? _youAvatar(WidgetRef ref) {
+    if (!ref.watch(isSignedInProvider)) return null;
+    final profile = ref.watch(myProfileProvider).value;
+    final user = ref.watch(authUserProvider).value;
+    final name =
+        profile?.displayName ?? user?.displayName ?? user?.email ?? 'Me';
+    return ChannelAvatar(
+      name: name,
+      imageUrl: profile?.avatarUrl ?? '',
+      color: profile?.avatarColorValue,
+      size: 24,
     );
   }
 
@@ -88,6 +107,7 @@ class AppShell extends ConsumerWidget {
                   selectedIndex: _branchToNavItem(navigationShell.currentIndex),
                   forceDark: onShorts,
                   onTap: (item) => _onNavTap(context, ref, item),
+                  youAvatar: _youAvatar(ref),
                 ),
               ],
             ),
@@ -123,8 +143,10 @@ class _OfflineBar extends StatelessWidget {
               child: SafeArea(
                 bottom: false,
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   child: Row(
                     children: const [
                       Icon(Symbols.wifi_off, color: Colors.white, size: 18),

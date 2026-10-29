@@ -20,11 +20,11 @@ class VideoListScreen extends ConsumerWidget {
   final VideoListKind kind;
 
   String get _title => switch (kind) {
-        VideoListKind.history => 'History',
-        VideoListKind.liked => 'Liked videos',
-        VideoListKind.watchLater => 'Watch later',
-        VideoListKind.yourVideos => 'Your videos',
-      };
+    VideoListKind.history => 'History',
+    VideoListKind.liked => 'Liked videos',
+    VideoListKind.watchLater => 'Watch later',
+    VideoListKind.yourVideos => 'Your videos',
+  };
 
   Future<void> _confirmClearHistory(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -55,9 +55,11 @@ class VideoListScreen extends ConsumerWidget {
         const SnackBar(content: Text('Watch history cleared')),
       );
     } catch (_) {
-      messenger.showSnackBar(const SnackBar(
-        content: Text("Couldn't clear history. Check your connection."),
-      ));
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text("Couldn't clear history. Check your connection."),
+        ),
+      );
     }
   }
 
@@ -125,34 +127,35 @@ class VideoListScreen extends ConsumerWidget {
   Widget _empty(BuildContext context, WidgetRef ref) {
     return switch (kind) {
       VideoListKind.history => EmptyState(
-          icon: Symbols.history,
-          title: 'No watch history yet',
-          message: 'Videos you watch will show up here.',
-          actionLabel: 'Explore videos',
-          onAction: () => context.go('/home'),
-        ),
+        icon: Symbols.history,
+        title: 'No watch history yet',
+        message: 'Videos you watch will show up here.',
+        actionLabel: 'Explore videos',
+        onAction: () => context.go('/home'),
+      ),
       VideoListKind.liked => EmptyState(
-          icon: Symbols.thumb_up,
-          title: 'No liked videos yet',
-          message: 'Tap 👍 on a video to save it here.',
-          actionLabel: 'Explore videos',
-          onAction: () => context.go('/home'),
-        ),
+        icon: Symbols.thumb_up,
+        title: 'No liked videos yet',
+        message: 'Tap 👍 on a video to save it here.',
+        actionLabel: 'Explore videos',
+        onAction: () => context.go('/home'),
+      ),
       VideoListKind.watchLater => EmptyState(
-          icon: Symbols.schedule,
-          title: 'Nothing saved for later',
-          message: 'Tap Save on a video to watch it later.',
-          actionLabel: 'Explore videos',
-          onAction: () => context.go('/home'),
-        ),
+        icon: Symbols.schedule,
+        title: 'Nothing saved for later',
+        message: 'Tap Save on a video to watch it later.',
+        actionLabel: 'Explore videos',
+        onAction: () => context.go('/home'),
+      ),
       VideoListKind.yourVideos => EmptyState(
-          icon: Symbols.video_library,
-          title: 'No videos yet',
-          message: 'Videos you upload will show up here, including unlisted '
-              'ones.',
-          actionLabel: 'Upload a video',
-          onAction: () => showCreateSheet(context, ref),
-        ),
+        icon: Symbols.video_library,
+        title: 'No videos yet',
+        message:
+            'Videos you upload will show up here, including unlisted '
+            'ones.',
+        actionLabel: 'Upload a video',
+        onAction: () => showCreateSheet(context, ref),
+      ),
     };
   }
 }

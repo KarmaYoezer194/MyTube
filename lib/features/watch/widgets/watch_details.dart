@@ -12,6 +12,7 @@ import '../../../core/widgets/channel_avatar.dart';
 import '../../../core/widgets/subscribe_button.dart';
 import '../../../data/models/video.dart';
 import '../../../data/repositories/user_repository.dart';
+import '../../auth/require_account.dart';
 import '../../comments/comments_preview_card.dart';
 import 'description_sheet.dart';
 
@@ -41,17 +42,24 @@ class WatchDetails extends ConsumerWidget {
     final reaction = ref.watch(reactionProvider(video.id)).value ?? 0;
     final saved = ref.watch(isInWatchLaterProvider(video.id)).value ?? false;
 
+    // Guests get the "Sign in to …" sheet instead.
     void react(int tapped) {
+      final reason = tapped == 1 ? SignInReason.like : SignInReason.dislike;
+      if (!checkSignedIn(context, ref, reason: reason)) return;
       repository
           .react(videoId: video.id, current: reaction, tapped: tapped)
           .catchError(showSaveError);
     }
 
     void toggleWatchLater() {
+      if (!checkSignedIn(context, ref, reason: SignInReason.save)) return;
       repository
           .setWatchLater(video.id, saved: !saved)
-          .then((_) => showMessage(
-              saved ? 'Removed from Watch later' : 'Saved to Watch later'))
+          .then(
+            (_) => showMessage(
+              saved ? 'Removed from Watch later' : 'Saved to Watch later',
+            ),
+          )
           .catchError(showSaveError);
     }
 
@@ -70,15 +78,17 @@ class WatchDetails extends ConsumerWidget {
                   video.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.watchTitle
-                      .copyWith(color: colors.textPrimary),
+                  style: AppTextStyles.watchTitle.copyWith(
+                    color: colors.textPrimary,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text.rich(
                   TextSpan(
                     children: [
                       TextSpan(
-                        text: '${formatViews(video.views)}  '
+                        text:
+                            '${formatViews(video.views)}  '
                             '${timeAgo(video.createdAt)}  ',
                       ),
                       TextSpan(
@@ -90,7 +100,9 @@ class WatchDetails extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  style: AppTextStyles.meta.copyWith(color: colors.textSecondary),
+                  style: AppTextStyles.meta.copyWith(
+                    color: colors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -221,8 +233,10 @@ class _ActionPill extends StatelessWidget {
                 color: colors.textPrimary,
               ),
               const SizedBox(width: 6),
-              Text(label,
-                  style: AppTextStyles.chip.copyWith(color: colors.textPrimary)),
+              Text(
+                label,
+                style: AppTextStyles.chip.copyWith(color: colors.textPrimary),
+              ),
             ],
           ),
         ),
@@ -270,8 +284,9 @@ class _LikeDislikePill extends StatelessWidget {
                   const SizedBox(width: 6),
                   Text(
                     formatCompactCount(likes),
-                    style:
-                        AppTextStyles.chip.copyWith(color: colors.textPrimary),
+                    style: AppTextStyles.chip.copyWith(
+                      color: colors.textPrimary,
+                    ),
                   ),
                 ],
               ),

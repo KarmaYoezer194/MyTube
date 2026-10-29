@@ -14,8 +14,7 @@ final upNextProvider = Provider.family<List<Video>, String>((ref, videoId) {
       .toList();
   if (current == null) return candidates;
 
-  final sameCategory =
-      candidates.where((v) => v.category == current.category);
+  final sameCategory = candidates.where((v) => v.category == current.category);
   final others = candidates.where((v) => v.category != current.category);
   return [...sameCategory, ...others];
 });

@@ -79,7 +79,8 @@ class Video {
       title: data['title'] as String? ?? '',
       description: data['description'] as String? ?? '',
       // Uploads play as a phone-sized MP4 (see playableVideoUrl).
-      videoUrl: sample?.videoUrl ??
+      videoUrl:
+          sample?.videoUrl ??
           playableVideoUrl(data['videoUrl'] as String? ?? ''),
       thumbnailUrl:
           sample?.thumbnailUrl ?? data['thumbnailUrl'] as String? ?? '',

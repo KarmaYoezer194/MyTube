@@ -23,16 +23,16 @@ class ThemeModeController extends Notifier<ThemeMode> {
   }
 }
 
-final themeModeProvider =
-    NotifierProvider<ThemeModeController, ThemeMode>(ThemeModeController.new);
+final themeModeProvider = NotifierProvider<ThemeModeController, ThemeMode>(
+  ThemeModeController.new,
+);
 
 /// Whether the next video plays automatically when one ends. On by default.
 class AutoplayController extends Notifier<bool> {
   static const _key = 'autoplay';
 
   @override
-  bool build() =>
-      ref.watch(sharedPreferencesProvider).getBool(_key) ?? true;
+  bool build() => ref.watch(sharedPreferencesProvider).getBool(_key) ?? true;
 
   void setEnabled(bool enabled) {
     state = enabled;
@@ -40,5 +40,6 @@ class AutoplayController extends Notifier<bool> {
   }
 }
 
-final autoplayProvider =
-    NotifierProvider<AutoplayController, bool>(AutoplayController.new);
+final autoplayProvider = NotifierProvider<AutoplayController, bool>(
+  AutoplayController.new,
+);

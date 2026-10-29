@@ -64,8 +64,9 @@ class _PlayerProgressBarState extends State<PlayerProgressBar> {
           0,
           (furthest, range) => math.max(furthest, range.end.inMilliseconds),
         );
-        final buffered =
-            total == 0 ? 0.0 : (bufferedEnd / total).clamp(0.0, 1.0);
+        final buffered = total == 0
+            ? 0.0
+            : (bufferedEnd / total).clamp(0.0, 1.0);
 
         return LayoutBuilder(
           builder: (context, constraints) {
@@ -75,7 +76,8 @@ class _PlayerProgressBarState extends State<PlayerProgressBar> {
               painter: _ProgressPainter(
                 played: _dragFraction ?? played,
                 buffered: buffered,
-                thin: !widget.interactive ||
+                thin:
+                    !widget.interactive ||
                     (widget.thinUntilDragged && _dragFraction == null),
                 dragging: _dragFraction != null,
               ),
@@ -87,8 +89,7 @@ class _PlayerProgressBarState extends State<PlayerProgressBar> {
               onTapDown: (d) => _dragTo(d.localPosition.dx, width),
               onTapUp: (_) => _commit(),
               onHorizontalDragStart: (d) => _dragTo(d.localPosition.dx, width),
-              onHorizontalDragUpdate: (d) =>
-                  _dragTo(d.localPosition.dx, width),
+              onHorizontalDragUpdate: (d) => _dragTo(d.localPosition.dx, width),
               onHorizontalDragEnd: (_) => _commit(),
               child: bar,
             );

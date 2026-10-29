@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/utils/share_video.dart';
 import '../../../data/models/video.dart';
 import '../../../data/repositories/user_repository.dart';
+import '../../auth/require_account.dart';
 import '../home_providers.dart';
 
 /// The ⋮ menu of a video card: Save to Watch later, Share, Not interested.
@@ -34,10 +35,12 @@ Future<void> showVideoOptionsSheet(
         mainAxisSize: MainAxisSize.min,
         children: [
           // Consumer: lets this one row read whether the video is saved.
+          // (Its own names rowContext/rowRef: the check below must use the
+          // video card's `context`/`ref`, because this menu closes first.)
           Consumer(
-            builder: (context, ref, _) {
+            builder: (rowContext, rowRef, child) {
               final saved =
-                  ref.watch(isInWatchLaterProvider(video.id)).value ?? false;
+                  rowRef.watch(isInWatchLaterProvider(video.id)).value ?? false;
               return ListTile(
                 leading: Icon(Symbols.schedule, fill: saved ? 1 : 0),
                 title: Text(
@@ -45,13 +48,24 @@ Future<void> showVideoOptionsSheet(
                 ),
                 onTap: () {
                   Navigator.pop(sheetContext);
+                  // Guests get the "Sign in to …" sheet instead.
+                  if (!checkSignedIn(context, ref, reason: SignInReason.save)) {
+                    return;
+                  }
                   repository
                       .setWatchLater(video.id, saved: !saved)
-                      .then((_) => showMessage(saved
-                          ? 'Removed from Watch later'
-                          : 'Saved to Watch later'))
-                      .catchError((Object _) => showMessage(
-                          "Couldn't save. Check your internet connection."));
+                      .then(
+                        (_) => showMessage(
+                          saved
+                              ? 'Removed from Watch later'
+                              : 'Saved to Watch later',
+                        ),
+                      )
+                      .catchError(
+                        (Object _) => showMessage(
+                          "Couldn't save. Check your internet connection.",
+                        ),
+                      );
                 },
               );
             },

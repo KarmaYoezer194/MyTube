@@ -1,20 +1,19 @@
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/avatar_colors.dart';
 import '../models/app_user.dart';
+import 'auth_repository.dart';
 import 'video_repository.dart';
 
-/// The signed-in (anonymous) user's id. main.dart signs in before the app
-/// starts, so it is always there.
-final currentUidProvider = Provider<String>(
-  (ref) => FirebaseAuth.instance.currentUser!.uid,
-);
+// So files that import this one can keep using currentUidProvider.
+export 'auth_repository.dart' show currentUidProvider, isSignedInProvider;
 
 /// Everything that belongs to ONE user, stored under `users/{uid}`:
-///   (the document itself)  displayName, handle, avatarUrl, createdAt
+///   (the document itself)  displayName, handle, avatarUrl, avatarColor,
+///                          createdAt  (accounts only, not guests)
 ///   reactions/{videoId}   value: 1 (like) or -1 (dislike)
 ///   history/{videoId}     watchedAt, positionSeconds
 ///   watchLater/{videoId}  addedAt
@@ -30,35 +29,48 @@ class UserRepository {
 
   // ---------------- Profile ----------------
 
-  /// My profile, or null if I haven't picked a name yet.
+  /// My profile, or null if I don't have one (guests).
   Stream<AppUser?> watchProfile() {
-    return _me
-        .snapshots()
-        .map((doc) => doc.exists ? AppUser.fromFirestore(doc) : null);
+    return _me.snapshots().map(
+      (doc) => doc.exists ? AppUser.fromFirestore(doc) : null,
+    );
   }
 
-  /// My profile, read once (not live). null if I haven't picked a name yet.
+  /// My profile, read once (not live). null if I don't have one (guests).
   Future<AppUser?> getProfile() async {
     final doc = await _me.get();
     return doc.exists ? AppUser.fromFirestore(doc) : null;
   }
 
-  /// Creates `users/{uid}` the first time you comment or upload.
-  Future<AppUser> createProfile(String displayName) async {
+  /// Creates or updates `users/{uid}` when you sign up or sign in.
+  ///
+  /// Saves your name and its avatar color. Your @handle is made once and
+  /// then kept, so it doesn't change every time you sign in. `merge: true`
+  /// updates these fields without deleting anything else.
+  Future<AppUser> saveProfile(String displayName) async {
     final name = displayName.trim();
-    final handle = makeHandle(name);
+    final existing = await getProfile();
+    final handle = (existing?.handle.isNotEmpty ?? false)
+        ? existing!.handle
+        : makeHandle(name);
+    final color = avatarColorFor(name).toARGB32();
+    final avatarUrl = existing?.avatarUrl ?? '';
+
     await _me.set({
       'displayName': name,
       'handle': handle,
-      'avatarUrl': '',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+      'avatarUrl': avatarUrl,
+      'avatarColor': color,
+      if (existing == null) 'createdAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
     return AppUser(
       uid: _uid,
       displayName: name,
       handle: handle,
-      avatarUrl: '',
-      createdAt: DateTime.now(),
+      avatarUrl: avatarUrl,
+      avatarColor: color,
+      createdAt: existing?.createdAt ?? DateTime.now(),
     );
   }
 
@@ -171,14 +183,16 @@ class UserRepository {
         .orderBy('watchedAt', descending: true)
         .limit(100)
         .snapshots()
-        .map((snapshot) => [
-              for (final doc in snapshot.docs)
-                HistoryEntry(
-                  videoId: doc.id,
-                  positionSeconds:
-                      (doc.data()['positionSeconds'] as num?)?.toInt() ?? 0,
-                ),
-            ]);
+        .map(
+          (snapshot) => [
+            for (final doc in snapshot.docs)
+              HistoryEntry(
+                videoId: doc.id,
+                positionSeconds:
+                    (doc.data()['positionSeconds'] as num?)?.toInt() ?? 0,
+              ),
+          ],
+        );
   }
 
   /// Deletes my whole watch history (resume positions too).
@@ -197,11 +211,12 @@ class UserRepository {
   /// (Filtered and sorted in the app, so Firestore needs no extra index.)
   Stream<List<String>> watchLikedVideoIds() {
     return _me.collection('reactions').snapshots().map((snapshot) {
-      final liked = snapshot.docs
-          .where((doc) => doc.data()['value'] == 1)
-          .toList()
-        ..sort((a, b) => _time(b.data()['reactedAt'])
-            .compareTo(_time(a.data()['reactedAt'])));
+      final liked =
+          snapshot.docs.where((doc) => doc.data()['value'] == 1).toList()..sort(
+            (a, b) => _time(
+              b.data()['reactedAt'],
+            ).compareTo(_time(a.data()['reactedAt'])),
+          );
       return [for (final doc in liked) doc.id];
     });
   }

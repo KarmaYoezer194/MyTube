@@ -33,8 +33,9 @@ class PlayerMutedController extends Notifier<bool> {
   void setMuted(bool muted) => state = muted;
 }
 
-final playerMutedProvider =
-    NotifierProvider<PlayerMutedController, bool>(PlayerMutedController.new);
+final playerMutedProvider = NotifierProvider<PlayerMutedController, bool>(
+  PlayerMutedController.new,
+);
 
 /// Playback speed (0.25x - 2x), kept for the next videos too.
 class PlaybackSpeedController extends Notifier<double> {
@@ -44,8 +45,7 @@ class PlaybackSpeedController extends Notifier<double> {
   void setSpeed(double speed) => state = speed;
 }
 
-final playbackSpeedProvider =
-    NotifierProvider<PlaybackSpeedController, double>(
+final playbackSpeedProvider = NotifierProvider<PlaybackSpeedController, double>(
   PlaybackSpeedController.new,
 );
 
@@ -106,17 +106,34 @@ class PlaybackController extends AsyncNotifier<VideoPlayerController?> {
       controller.setPlaybackSpeed(speed);
     });
 
-    // Save the length ONLY if Firestore doesn't have one yet (0).
-    // Never overwrite a known length: the first time Cloudinary converts a
-    // video it streams it while converting, and the browser can't see the
-    // full length yet, so its number can be wrong.
-    final seconds = controller.value.duration.inSeconds;
-    if (seconds > 0 && video.durationSeconds == 0) {
-      ref
-          .read(videoRepositoryProvider)
-          .updateDuration(video.id, seconds)
-          .catchError((Object e) => debugPrint('Saving duration failed: $e'));
+    // ---- Video length ----
+    // The first time Cloudinary converts a video it streams it while
+    // converting, so the browser may only see the first few seconds
+    // (e.g. "0:03" for a 3-minute video). A wrong length is always too SHORT,
+    // so we save the length whenever the player sees a longer one than
+    // Firestore has - also while playing, as the browser learns more.
+    final videoRepository = ref.read(videoRepositoryProvider);
+    var savedSeconds = video.durationSeconds;
+    void saveLengthIfLonger() {
+      final length = controller.value.duration.inSeconds;
+      // +1: Cloudinary rounds, the player rounds down - ignore that.
+      if (length > savedSeconds + 1) {
+        savedSeconds = length;
+        videoRepository
+            .updateDuration(video.id, length)
+            .catchError((Object e) => debugPrint('Saving duration failed: $e'));
+      }
     }
+
+    debugPrint(
+      'VIDEO LENGTH (${video.id}): Firestore has '
+      '${video.durationSeconds}s, the player sees '
+      '${controller.value.duration.inSeconds}s',
+    );
+    saveLengthIfLonger();
+    controller.addListener(saveLengthIfLonger);
+    ref.onDispose(() => controller.removeListener(saveLengthIfLonger));
+    final seconds = controller.value.duration.inSeconds;
 
     // ---- Resume where you left off ----
     // (Not if you were in the first 5 seconds or the last 10.)
@@ -158,11 +175,11 @@ class PlaybackController extends AsyncNotifier<VideoPlayerController?> {
 
 final playbackProvider =
     AsyncNotifierProvider<PlaybackController, VideoPlayerController?>(
-  PlaybackController.new,
-  // Riverpod normally retries failed providers. A broken video link won't
-  // fix itself, so we show "Video unavailable" with a Retry button instead.
-  retry: (retryCount, error) => null,
-);
+      PlaybackController.new,
+      // Riverpod normally retries failed providers. A broken video link won't
+      // fix itself, so we show "Video unavailable" with a Retry button instead.
+      retry: (retryCount, error) => null,
+    );
 
 /// The ready player, or null while loading / on error / when closed.
 /// (Never returns a player that is being replaced.)

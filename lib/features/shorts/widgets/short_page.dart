@@ -15,6 +15,7 @@ import '../../../data/models/video.dart';
 import '../../../data/repositories/comment_repository.dart';
 import '../../../data/repositories/user_repository.dart';
 import '../../../data/repositories/video_repository.dart';
+import '../../auth/require_account.dart';
 import '../../comments/comments_sheet.dart';
 import '../../watch/playback_controller.dart';
 import '../../watch/widgets/player_progress_bar.dart';
@@ -57,8 +58,10 @@ class _ShortPageState extends ConsumerState<ShortPage> {
     try {
       await _controller.initialize();
     } catch (error) {
-      debugPrint('SHORT UNAVAILABLE (${widget.video.id}): '
-          '${widget.video.videoUrl}\n$error');
+      debugPrint(
+        'SHORT UNAVAILABLE (${widget.video.id}): '
+        '${widget.video.videoUrl}\n$error',
+      );
       if (mounted) setState(() => _failed = true);
       return;
     }
@@ -66,10 +69,11 @@ class _ShortPageState extends ConsumerState<ShortPage> {
     await _controller.setLooping(true);
     await _controller.setVolume(ref.read(playerMutedProvider) ? 0 : 1);
 
-    // Save the length ONLY if Firestore doesn't have one yet (0) - see the
-    // note in playback_controller.dart about Cloudinary's first conversion.
+    // Save the length if it's longer than the one in Firestore - see the
+    // note in playback_controller.dart about Cloudinary's first conversion
+    // (a wrong length is always too short).
     final seconds = _controller.value.duration.inSeconds;
-    if (seconds > 0 && widget.video.durationSeconds == 0) {
+    if (seconds > widget.video.durationSeconds + 1) {
       ref
           .read(videoRepositoryProvider)
           .updateDuration(widget.video.id, seconds)
@@ -148,16 +152,11 @@ class _ShortPageState extends ConsumerState<ShortPage> {
           NetworkThumbnail(url: video.thumbnailUrl),
 
         if (!_ready && !_failed)
-          const Center(
-            child: CircularProgressIndicator(color: Colors.white),
-          ),
+          const Center(child: CircularProgressIndicator(color: Colors.white)),
         if (_failed) const _UnavailableMessage(),
 
         // ---- Tap anywhere = pause / play ----
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: _togglePlay,
-        ),
+        GestureDetector(behavior: HitTestBehavior.opaque, onTap: _togglePlay),
 
         // ---- Big ▶ / ❚❚ that flashes after a tap ----
         IgnorePointer(
@@ -197,11 +196,7 @@ class _ShortPageState extends ConsumerState<ShortPage> {
         ),
 
         // ---- Right side: like, dislike, comments, share, remix ----
-        Positioned(
-          right: 8,
-          bottom: 24,
-          child: _ActionColumn(video: video),
-        ),
+        Positioned(right: 8, bottom: 24, child: _ActionColumn(video: video)),
 
         // ---- Bottom left: channel, Subscribe, title ----
         Positioned(
@@ -316,11 +311,16 @@ class _ActionColumn extends ConsumerWidget {
     }
 
     void react(int tapped) {
+      // Guests get the "Sign in to …" sheet instead.
+      final reason = tapped == 1 ? SignInReason.like : SignInReason.dislike;
+      if (!checkSignedIn(context, ref, reason: reason)) return;
       ref
           .read(userRepositoryProvider)
           .react(videoId: video.id, current: reaction, tapped: tapped)
-          .catchError((Object _) =>
-              showMessage("Couldn't save. Check your internet connection."));
+          .catchError(
+            (Object _) =>
+                showMessage("Couldn't save. Check your internet connection."),
+          );
     }
 
     return Column(

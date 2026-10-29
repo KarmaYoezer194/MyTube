@@ -9,7 +9,7 @@ import '../../core/utils/time_ago.dart';
 import '../../core/widgets/category_chip.dart';
 import '../../core/widgets/channel_avatar.dart';
 import '../../core/widgets/empty_state.dart';
-import '../../core/widgets/ensure_profile.dart';
+import '../auth/require_account.dart';
 import '../../core/widgets/skeleton.dart';
 import '../../data/models/comment.dart';
 import '../../data/repositories/comment_repository.dart';
@@ -27,10 +27,8 @@ Future<void> showCommentsSheet(BuildContext context, String videoId) {
       initialChildSize: 0.7,
       minChildSize: 0.4,
       maxChildSize: 0.95,
-      builder: (context, scrollController) => _CommentsSheet(
-        videoId: videoId,
-        scrollController: scrollController,
-      ),
+      builder: (context, scrollController) =>
+          _CommentsSheet(videoId: videoId, scrollController: scrollController),
     ),
   );
 }
@@ -71,15 +69,17 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
     final text = _input.text.trim();
     if (text.isEmpty) return;
 
-    // First comment ever: ask for a name and create the profile.
-    final author = await ensureProfile(context, ref);
+    // Commenting needs an account (guests get a "Sign in" message).
+    final author = await requireAccount(
+      context,
+      ref,
+      reason: SignInReason.comment,
+    );
     if (author == null || !context.mounted) return;
 
-    final posting = ref.read(commentRepositoryProvider).addComment(
-          videoId: widget.videoId,
-          author: author,
-          text: text,
-        );
+    final posting = ref
+        .read(commentRepositoryProvider)
+        .addComment(videoId: widget.videoId, author: author, text: text);
 
     // It's already in the list (Firestore shows local changes at once).
     // Switch to Newest and scroll up so you see it on top.
@@ -109,7 +109,9 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
     final commentsAsync = ref.watch(commentsProvider(widget.videoId));
     final likedIds =
         ref.watch(likedCommentIdsProvider(widget.videoId)).value ?? const {};
-    final profile = ref.watch(myProfileProvider).value;
+    final isSignedIn = ref.watch(isSignedInProvider);
+    // Guests show the grey "person" avatar next to the comment box.
+    final profile = isSignedIn ? ref.watch(myProfileProvider).value : null;
     final count = commentsAsync.value?.length;
 
     // Its own ScaffoldMessenger + Scaffold, so snackbars appear on the
@@ -132,8 +134,9 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
                           children: [
                             Text(
                               'Comments',
-                              style: AppTextStyles.sectionHeader
-                                  .copyWith(color: colors.textPrimary),
+                              style: AppTextStyles.sectionHeader.copyWith(
+                                color: colors.textPrimary,
+                              ),
                             ),
                             const SizedBox(width: 8),
                             if (count != null)
@@ -196,7 +199,8 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
                             message: 'Check your internet connection.',
                             actionLabel: 'Retry',
                             onAction: () => ref.invalidate(
-                                commentsProvider(widget.videoId)),
+                              commentsProvider(widget.videoId),
+                            ),
                           ),
                         ),
                       ],
@@ -225,24 +229,35 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
                                 key: ValueKey(comment.id),
                                 comment: comment,
                                 liked: likedIds.contains(comment.id),
-                                onLike: (liked) => ref
-                                    .read(commentRepositoryProvider)
-                                    .setCommentLiked(
-                                      videoId: widget.videoId,
-                                      commentId: comment.id,
-                                      liked: liked,
-                                    )
-                                    .catchError((Object _) {
-                                  if (context.mounted) {
-                                    _showMessage(
-                                      context,
-                                      "Couldn't save. Check your internet "
-                                      'connection.',
-                                    );
+                                onLike: (liked) {
+                                  if (!checkSignedIn(
+                                    context,
+                                    ref,
+                                    reason: SignInReason.likeComment,
+                                  )) {
+                                    return;
                                   }
-                                }),
+                                  ref
+                                      .read(commentRepositoryProvider)
+                                      .setCommentLiked(
+                                        videoId: widget.videoId,
+                                        commentId: comment.id,
+                                        liked: liked,
+                                      )
+                                      .catchError((Object _) {
+                                        if (context.mounted) {
+                                          _showMessage(
+                                            context,
+                                            "Couldn't save. Check your internet "
+                                            'connection.',
+                                          );
+                                        }
+                                      });
+                                },
                                 onReply: () => _showMessage(
-                                    context, 'Replies are coming soon'),
+                                  context,
+                                  'Replies are coming soon',
+                                ),
                               );
                             },
                           ),
@@ -268,6 +283,7 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
                     ChannelAvatar(
                       name: profile?.displayName ?? '',
                       imageUrl: profile?.avatarUrl ?? '',
+                      color: profile?.avatarColorValue,
                       size: 32,
                     ),
                     const SizedBox(width: 12),
@@ -278,6 +294,18 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
                         minLines: 1,
                         maxLines: 4,
                         maxLength: 500,
+                        // Guests tapping the box get the sign-in sheet
+                        // (like YouTube), instead of typing for nothing.
+                        readOnly: !isSignedIn,
+                        onTap: () {
+                          if (!isSignedIn) {
+                            checkSignedIn(
+                              context,
+                              ref,
+                              reason: SignInReason.comment,
+                            );
+                          }
+                        },
                         onChanged: (_) => setState(() {}),
                         decoration: InputDecoration(
                           hintText: 'Add a comment...',
