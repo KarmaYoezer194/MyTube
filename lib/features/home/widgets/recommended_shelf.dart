@@ -40,7 +40,9 @@ class RecommendedShelf extends ConsumerWidget {
             ),
           ),
           SizedBox(
-            height: 176,
+            // 16:9 picture (124 px) + 2 title lines + channel line, with
+            // room to spare for bigger text settings.
+            height: 204,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -78,6 +80,7 @@ class _Card extends StatelessWidget {
         width: 220,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
@@ -107,11 +110,14 @@ class _Card extends StatelessWidget {
                 color: colors.textPrimary,
               ),
             ),
-            Text(
-              video.channelName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.meta.copyWith(color: colors.textSecondary),
+            // Takes what's left, so the card can never overflow.
+            Flexible(
+              child: Text(
+                video.channelName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.meta.copyWith(color: colors.textSecondary),
+              ),
             ),
           ],
         ),

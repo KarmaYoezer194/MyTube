@@ -16,6 +16,7 @@ import 'package:mytube/data/models/video.dart';
 import 'package:mytube/data/repositories/user_repository.dart';
 import 'package:mytube/data/repositories/video_lookup.dart';
 import 'package:mytube/features/discovery/hidden_content.dart';
+import 'package:mytube/features/home/widgets/recommended_shelf.dart';
 import 'package:mytube/features/you/you_providers.dart';
 
 const _cdn = 'https://res.cloudinary.com/hcrar4ku';
@@ -213,6 +214,42 @@ void main() {
       );
       await tester.tap(find.text('Cars'));
       expect(taps, 1);
+    });
+
+    testWidgets('Recommended cards never overflow, even with long titles', (
+      tester,
+    ) async {
+      final long = Video(
+        id: 'x',
+        title:
+            'A very long title that needs two lines and then some more '
+            'words so it would wrap even further',
+        description: '',
+        videoUrl: '',
+        thumbnailUrl: '',
+        durationSeconds: 888,
+        channelId: 'c',
+        channelName: 'A channel with a long name as well',
+        channelAvatarUrl: '',
+        subscriberCount: 0,
+        views: 0,
+        likes: 0,
+        category: 'Other',
+        isShort: false,
+        uploaderUid: 'u',
+        createdAt: DateTime(2026),
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          child: _wrap(
+            SingleChildScrollView(
+              child: RecommendedShelf(videos: [long, long]),
+            ),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      expect(find.text('Recommended for you'), findsOneWidget);
     });
 
     testWidgets('a thumbnail without a link shows the play icon', (
