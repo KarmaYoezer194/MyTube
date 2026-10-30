@@ -43,7 +43,7 @@ Claude builds ONE phase when asked, then stops (see CLAUDE.md).
 
 
 
-- [ ] **Phase 17 — Notifications (in-app)**
+- [x] **Phase 17 — Notifications (in-app)**
   - An upload fans out to subscribers (batched, capped).
   - Replies, and comments on my video, notify me.
   - Real unread count, read/unread, tap to open, swipe or menu to remove.
@@ -95,6 +95,7 @@ Format: `- [ ] (Phase X) What to do — where — why`
 - [ ] (Phase 14) Deploy the new rules AND the new comments index: `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — without it, posting/replying/deleting comments is refused ("Couldn't post") and the **Top** sort shows "Couldn't load comments" until the index finishes building (a few minutes; Newest works right away).
 - [ ] (Phase 15) Deploy the rules and the 2 new playlist indexes: `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — until then creating playlists fails ("Couldn't create the playlist"), and your playlists / a channel's Playlists tab stay empty or show an error until the indexes finish building (a few minutes). (If you haven't done the Phase 14 deploy yet, this one command covers both.)
 - [ ] (Phase 16, whenever you delete a video in Studio) Delete its file in Cloudinary too — console.cloudinary.com → Media Library → search the name shown in the delete dialog (it has a Copy button) → select → Delete — the app can't do it (that needs the API secret, which must never be in the app), and leftover files use your free storage. No rules deploy is needed for Phase 16.
+- [ ] (Phase 17) Deploy the rules and the new subscribers index: `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — until then no notifications are sent (the writes are refused) and uploads can't find their subscribers. The "subscribed.channelId" index takes a few minutes to build. (Covers the Phase 14/15 deploys too if they're still open.)
 
 ## Progress log
 
@@ -247,3 +248,31 @@ Newest entry at the bottom.
   Known limits: a deleted video's comments stay in the database (hidden;
   only their authors may delete them); dislikes and watch time aren't
   stored, so they aren't shown; the video file itself can't be replaced.
+- 2026-10-30 — **Phase 17 (Notifications) done.** Real in-app
+  notifications in `users/{uid}/notifications/{id}`, written by the
+  SENDER's app and checked by the rules (no Cloud Functions): a public
+  upload notifies up to 100 subscribers (found with a collection-group query
+  on `subscribed.channelId`, written 15 per batch); a comment notifies the
+  video's uploader; a reply notifies the author of the comment. Fixed ids
+  (`u_`/`c_`/`r_` + id) mean nothing is sent twice. New subscriptions save
+  `channelId`; older ones get it filled in automatically while the app runs
+  (the rules allow adding just that field). Bell badge = real unread count
+  (of the newest 50, "9+" above 9). Notifications page: blue dot + bold for
+  unread, tap opens the video (Shorts in the Shorts tab) and marks it read;
+  comment / reply notifications also open the comments with that comment
+  on top as "Highlighted comment" (replies open); ⋮ → Mark as read/unread,
+  Remove; swipe left to remove; "Mark all as read" (✓✓). Guests see a
+  "Sign in" page. Limits explained in docs/NOTIFICATIONS.md (sender's tab
+  does the work, 100-subscriber cap, no push while closed, no automatic
+  cleanup, a reply to a reply notifies the thread's author).
+  Files: new lib/data/models/app_notification.dart,
+  lib/data/repositories/notification_repository.dart, docs/NOTIFICATIONS.md;
+  rewrote lib/features/notifications/ (providers + screen; the old
+  "8 newest videos" fake list and its "seen at" setting are gone); changed
+  comments_sheet (send comment/reply notifications, highlighted comment,
+  root-navigator option), comment_tile (Highlighted label), upload_screen
+  (fan-out after a public upload), user_repository (channelId on
+  subscriptions + fill-in), app_shell (keeps subscriptions loaded), video
+  model (copyWith id), firestore.rules, firestore.indexes.json (field
+  override for the collection-group query). Tests:
+  test/notification_test.dart, comment tile + rules checks (110 tests).

@@ -14,6 +14,7 @@ import '../../core/theme/text_styles.dart';
 import '../../core/utils/mp4_length.dart';
 import '../../core/utils/upload_validation.dart';
 import '../../data/models/video.dart';
+import '../../data/repositories/notification_repository.dart';
 import '../../data/repositories/upload_repository.dart';
 import 'upload_flow.dart';
 
@@ -192,37 +193,49 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       debugPrint('UPLOAD: Cloudinary OK -> ${uploaded.secureUrl}');
       setState(() => _stage = _Stage.saving);
       final author = draft.author;
-      final id = await repository.saveVideo(
-        Video(
-          id: '',
-          title: _title.text.trim(),
-          description: _description.text.trim(),
-          videoUrl: uploaded.secureUrl,
-          thumbnailUrl:
-              thumbnailUrl ??
-              UploadRepository.videoThumbnailUrl(uploaded.publicId),
-          // Cloudinary's length, or the one read from the file if that's
-          // longer (fragmented MP4s can fool Cloudinary and the browser).
-          durationSeconds: math.max(
-            uploaded.durationSeconds,
-            mp4LengthSeconds(bytes),
-          ),
-          channelId: 'user-${author.uid}',
-          channelName: author.displayName,
-          channelAvatarUrl: author.avatarUrl,
-          channelAvatarColor: author.avatarColor,
-          subscriberCount: 0,
-          views: 0,
-          likes: 0,
-          category: _category,
-          isShort: draft.isShort,
-          uploaderUid: author.uid,
-          createdAt: DateTime.now(),
-          visibility: _visibility,
+      final newVideo = Video(
+        id: '',
+        title: _title.text.trim(),
+        description: _description.text.trim(),
+        videoUrl: uploaded.secureUrl,
+        thumbnailUrl:
+            thumbnailUrl ??
+            UploadRepository.videoThumbnailUrl(uploaded.publicId),
+        // Cloudinary's length, or the one read from the file if that's
+        // longer (fragmented MP4s can fool Cloudinary and the browser).
+        durationSeconds: math.max(
+          uploaded.durationSeconds,
+          mp4LengthSeconds(bytes),
         ),
+        channelId: 'user-${author.uid}',
+        channelName: author.displayName,
+        channelAvatarUrl: author.avatarUrl,
+        channelAvatarColor: author.avatarColor,
+        subscriberCount: 0,
+        views: 0,
+        likes: 0,
+        category: _category,
+        isShort: draft.isShort,
+        uploaderUid: author.uid,
+        createdAt: DateTime.now(),
+        visibility: _visibility,
       );
+      final id = await repository.saveVideo(newVideo);
 
-      // 4. Done!
+      // 4. Tell my subscribers (public uploads only). This keeps running
+      // after this screen closes.
+      if (_visibility == 'public') {
+        ref
+            .read(notificationRepositoryProvider)
+            .notifySubscribersOfUpload(
+              video: newVideo.copyWith(id: id),
+              me: author,
+            )
+            .then((sent) => debugPrint('NOTIFY: told $sent subscribers'))
+            .catchError((Object e) => debugPrint('NOTIFY upload: $e'));
+      }
+
+      // 5. Done!
       debugPrint('UPLOAD: saved in Firestore as videos/$id');
       final unlisted = _visibility == 'unlisted';
       messenger.showSnackBar(

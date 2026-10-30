@@ -65,6 +65,9 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Keeps my subscriptions loaded while the app runs: this also fills in
+    // the channelId on older ones, so channels can notify me of uploads.
+    ref.listen(subscribedIdsProvider, (_, _) {});
     final panel = ref.watch(playerPanelProvider);
     final navHeight = AppBottomNavBar.totalHeight(context);
     final onShorts = navigationShell.currentIndex == _shortsBranch;

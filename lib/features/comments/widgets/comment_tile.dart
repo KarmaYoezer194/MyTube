@@ -32,6 +32,7 @@ class CommentTile extends StatelessWidget {
     required this.creatorName,
     this.byCreator = false,
     this.pinned = false,
+    this.highlighted = false,
     this.onHeart,
     this.onMore,
   });
@@ -52,6 +53,9 @@ class CommentTile extends StatelessWidget {
 
   /// Shown at the top with "Pinned by …".
   final bool pinned;
+
+  /// Opened from a notification: shown at the top as "Highlighted comment".
+  final bool highlighted;
 
   /// Only for the video's uploader: give / take back a heart.
   final VoidCallback? onHeart;
@@ -85,6 +89,11 @@ class CommentTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (highlighted)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text('Highlighted comment', style: secondary),
+                  ),
                 if (pinned)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 4),

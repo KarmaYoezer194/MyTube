@@ -2,7 +2,7 @@ rules_version = '2';
 
 // MyTube security rules (Phase 12: final rules; Phase 13: channels;
 // Phase 14: replies, comment counters, edit, pin and creator heart;
-// Phase 15: playlists).
+// Phase 15: playlists; Phase 17: notifications).
 //
 // There is no server (free Spark plan, no Cloud Functions), so the app does
 // the "server" work itself and THESE RULES are what keeps it honest:
@@ -284,7 +284,9 @@ service cloud.firestore {
       }
 
       // ---- Subscriptions ----
-      // subscribed/{channelId}: addedAt.
+      // subscribed/{channelId}: addedAt, channelId (same as the document
+      // name; lets the channel find its subscribers - see the
+      // collection-group rule at the end).
       // The channel's subscriberCount must go +1 / -1 in the same batch
       // (channels without a document - old uploads - have no counter).
       // You can't subscribe to your own channel.
@@ -297,15 +299,89 @@ service cloud.firestore {
         allow read: if isMe(uid);
         allow create: if isMyAccount(uid) &&
           channelId != 'user-' + uid &&
-          request.resource.data.keys().hasOnly(['addedAt']) &&
+          request.resource.data.keys().hasOnly(['addedAt', 'channelId']) &&
+          (!('channelId' in request.resource.data) ||
+            request.resource.data.channelId == channelId) &&
           request.resource.data.addedAt == request.time &&
           (!exists(channelDoc(channelId)) || subscribersChangeBy(1));
+        // Subscriptions from before Phase 17 get their channelId filled in.
+        allow update: if isMyAccount(uid) && onlyChanges(['channelId']) &&
+          request.resource.data.channelId == channelId;
         // (A counter that is already 0 - e.g. a subscription made before
         // channels existed - stays at 0.)
         allow delete: if isMyAccount(uid) &&
           (!exists(channelDoc(channelId)) || subscribersChangeBy(-1) ||
             (get(channelDoc(channelId)).data.subscriberCount <= 0 &&
               subscribersChangeBy(0)));
+      }
+
+      // ---- Notifications (in-app) ----
+      // notifications/{id}: type ('upload' / 'comment' / 'reply'), fromUid,
+      // fromName, fromAvatarUrl, fromAvatarColor (optional), videoId,
+      // videoTitle, thumbnailUrl, isShort, commentId, replyId, text, read,
+      // createdAt.
+      // There is no server, so the SENDER's app writes into my folder. It
+      // may only do that for something it really did, to the right person:
+      // - upload:  its own video, and I am subscribed to its channel;
+      // - comment: its own comment on MY video;
+      // - reply:   its own reply to MY comment.
+      // The id says what it is about (u_/c_/r_ + id), so nothing can be
+      // sent twice (a second create of the same id is refused).
+      match /notifications/{notificationId} {
+        function isNotification(d) {
+          return d.keys().hasOnly(['type', 'fromUid', 'fromName',
+              'fromAvatarUrl', 'fromAvatarColor', 'videoId', 'videoTitle',
+              'thumbnailUrl', 'isShort', 'commentId', 'replyId', 'text',
+              'read', 'createdAt']) &&
+            d.keys().hasAll(['type', 'fromUid', 'fromName', 'fromAvatarUrl',
+              'videoId', 'videoTitle', 'thumbnailUrl', 'isShort', 'commentId',
+              'replyId', 'text', 'read', 'createdAt']) &&
+            d.fromUid == request.auth.uid &&
+            d.fromName == get(userDoc(request.auth.uid)).data.displayName &&
+            (d.fromAvatarUrl == '' || isCloudinaryUrl(d.fromAvatarUrl)) &&
+            (!('fromAvatarColor' in d) || isColor(d.fromAvatarColor)) &&
+            d.videoId is string && d.commentId is string &&
+            d.replyId is string &&
+            isText(d.videoTitle, 0, 100) &&
+            d.thumbnailUrl is string && d.thumbnailUrl.size() <= 500 &&
+            d.isShort is bool &&
+            isText(d.text, 0, 200) &&
+            d.read == false &&
+            d.createdAt == request.time;
+        }
+
+        allow read, delete: if isMe(uid);
+        // I mark it read / unread.
+        allow update: if isMe(uid) && onlyChanges(['read']) &&
+          request.resource.data.read is bool;
+
+        allow create: if hasAccount() && uid != request.auth.uid &&
+          isNotification(request.resource.data) &&
+          (
+            // A new upload by the sender, to its subscriber (me).
+            (request.resource.data.type == 'upload' &&
+              notificationId == 'u_' + request.resource.data.videoId &&
+              request.resource.data.commentId == '' &&
+              request.resource.data.replyId == '' &&
+              get(videoDoc(request.resource.data.videoId)).data.uploaderUid ==
+                request.auth.uid &&
+              exists(/databases/$(database)/documents/users/$(uid)/subscribed/$('user-' + request.auth.uid))) ||
+            // The sender's comment on my video.
+            (request.resource.data.type == 'comment' &&
+              notificationId == 'c_' + request.resource.data.commentId &&
+              request.resource.data.replyId == '' &&
+              get(videoDoc(request.resource.data.videoId)).data.uploaderUid == uid &&
+              get(commentDoc(request.resource.data.videoId,
+                request.resource.data.commentId)).data.uid == request.auth.uid) ||
+            // The sender's reply to my comment.
+            (request.resource.data.type == 'reply' &&
+              notificationId == 'r_' + request.resource.data.replyId &&
+              get(commentDoc(request.resource.data.videoId,
+                request.resource.data.commentId)).data.uid == uid &&
+              get(replyDoc(request.resource.data.videoId,
+                request.resource.data.commentId,
+                request.resource.data.replyId)).data.uid == request.auth.uid)
+          );
       }
 
       // ---- Comment likes ----
@@ -709,6 +785,15 @@ service cloud.firestore {
               get(commentDoc(videoId, commentId)).data.uid == request.auth.uid);
         }
       }
+    }
+
+    // ================= Subscribers of a channel =================
+    // A channel's owner finds who subscribed to it (to send upload
+    // notifications): a collection-group query over every user's
+    // subscribed/ folder, limited to their own channel.
+    match /{path=**}/subscribed/{channelId} {
+      allow read: if hasAccount() &&
+        resource.data.channelId == 'user-' + request.auth.uid;
     }
   }
 }

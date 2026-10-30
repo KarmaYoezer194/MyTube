@@ -10,120 +10,230 @@ import '../../core/widgets/channel_avatar.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/network_thumbnail.dart';
 import '../../core/widgets/skeleton.dart';
-import '../../data/repositories/video_repository.dart';
+import '../../data/models/app_notification.dart';
+import '../../data/repositories/notification_repository.dart';
+import '../../data/repositories/user_repository.dart';
+import '../auth/sign_in_screen.dart';
+import '../comments/comments_sheet.dart';
 import '../mini_player/player_panel_provider.dart';
 import 'notifications_providers.dart';
 
-/// The list behind the 🔔 on Home.
-class NotificationsScreen extends ConsumerStatefulWidget {
+/// The list behind the 🔔 on Home: uploads from channels I subscribe to,
+/// comments on my videos and replies to my comments.
+///
+/// Blue dot = unread. Tap = open (and mark read). Swipe left or ⋮ to
+/// remove; ⋮ also marks read / unread. "Mark all as read" in the top bar.
+class NotificationsScreen extends ConsumerWidget {
   const NotificationsScreen({super.key});
 
-  @override
-  ConsumerState<NotificationsScreen> createState() =>
-      _NotificationsScreenState();
-}
+  void _back(BuildContext context) =>
+      context.canPop() ? context.pop() : context.go('/home');
 
-class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
-  /// "Last seen" from BEFORE this visit, so new items keep their blue dot
-  /// while you are looking at them (the badge on Home is cleared already).
-  late final DateTime? _seenBefore;
-
-  @override
-  void initState() {
-    super.initState();
-    _seenBefore = ref.read(notificationsSeenAtProvider);
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => ref.read(notificationsSeenAtProvider.notifier).markAllSeen(),
-    );
+  void _showMessage(BuildContext context, String text) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
   }
 
-  void _back() {
-    if (context.canPop()) {
-      context.pop();
+  Future<void> _open(
+    BuildContext context,
+    WidgetRef ref,
+    AppNotification n,
+  ) async {
+    final repository = ref.read(notificationRepositoryProvider);
+    if (!n.read) {
+      repository.setRead(n.id, read: true).catchError((Object _) {});
+    }
+    // Shorts play in the Shorts tab, videos in the player.
+    if (n.isShort) {
+      context.go('/shorts?v=${n.videoId}');
     } else {
-      context.go('/home');
+      ref.read(playerPanelProvider.notifier).open(n.videoId);
+    }
+    // Comments and replies: show them in the comments, at the top.
+    if (n.type != NotificationType.upload) {
+      await showCommentsSheet(
+        context,
+        n.videoId,
+        highlightCommentId: n.commentId,
+        openReplies: n.type == NotificationType.reply,
+        useRootNavigator: true,
+      );
+    }
+  }
+
+  Future<void> _remove(
+    BuildContext context,
+    WidgetRef ref,
+    AppNotification n,
+  ) async {
+    try {
+      await ref.read(notificationRepositoryProvider).remove(n.id);
+    } catch (_) {
+      if (context.mounted) {
+        _showMessage(context, "Couldn't remove it. Check your connection.");
+      }
+    }
+  }
+
+  Future<void> _showMenu(
+    BuildContext context,
+    WidgetRef ref,
+    AppNotification n,
+  ) async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(
+                n.read ? Symbols.mark_email_unread : Symbols.mark_email_read,
+              ),
+              title: Text(n.read ? 'Mark as unread' : 'Mark as read'),
+              onTap: () => Navigator.pop(sheetContext, 'read'),
+            ),
+            ListTile(
+              leading: const Icon(Symbols.delete),
+              title: const Text('Remove this notification'),
+              onTap: () => Navigator.pop(sheetContext, 'remove'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!context.mounted) return;
+    switch (choice) {
+      case 'read':
+        ref
+            .read(notificationRepositoryProvider)
+            .setRead(n.id, read: !n.read)
+            .catchError((Object _) {
+              if (context.mounted) {
+                _showMessage(context, "Couldn't save. Check your connection.");
+              }
+            });
+      case 'remove':
+        await _remove(context, ref, n);
     }
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final signedIn = ref.watch(isSignedInProvider);
     final notifications = ref.watch(notificationsProvider);
+    final unread = [
+      for (final n in notifications.value ?? const <AppNotification>[])
+        if (!n.read) n.id,
+    ];
 
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
           tooltip: 'Back',
-          onPressed: _back,
+          onPressed: () => _back(context),
           icon: const Icon(Symbols.arrow_back),
         ),
         title: const Text('Notifications'),
         actions: [
-          IconButton(
-            tooltip: 'Search',
-            onPressed: () => context.push('/home/search'),
-            icon: const Icon(Symbols.search),
-          ),
+          if (unread.isNotEmpty)
+            IconButton(
+              tooltip: 'Mark all as read',
+              onPressed: () => ref
+                  .read(notificationRepositoryProvider)
+                  .markAllRead(unread)
+                  .catchError((Object _) {
+                    if (context.mounted) {
+                      _showMessage(
+                        context,
+                        "Couldn't save. Check your connection.",
+                      );
+                    }
+                  }),
+              icon: const Icon(Symbols.done_all),
+            ),
         ],
       ),
-      body: notifications.when(
-        loading: () => ListView.builder(
-          itemCount: 6,
-          itemBuilder: (context, index) => const _NotificationSkeleton(),
-        ),
-        error: (error, stackTrace) => EmptyState(
-          icon: Symbols.cloud_off,
-          title: "Couldn't load notifications",
-          message: 'Check your internet connection and try again.',
-          actionLabel: 'Retry',
-          onAction: () => ref.invalidate(allVideosProvider),
-        ),
-        data: (list) {
-          if (list.isEmpty) {
-            return const EmptyState(
+      body: !signedIn
+          ? EmptyState(
               icon: Symbols.notifications,
-              title: 'Your notifications live here',
-              message: 'New uploads from channels will show up here.',
-            );
-          }
-          return ListView.builder(
-            itemCount: list.length,
-            itemBuilder: (context, index) {
-              final n = list[index];
-              final unread = _seenBefore == null || n.time.isAfter(_seenBefore);
-              return _NotificationTile(
-                notification: n,
-                unread: unread,
-                onTap: () {
-                  if (n.video.isShort) {
-                    context.go('/shorts?v=${n.video.id}');
-                  } else {
-                    ref.read(playerPanelProvider.notifier).open(n.video.id);
-                  }
-                },
-              );
-            },
-          );
-        },
-      ),
+              title: "Don't miss new videos",
+              message:
+                  'Sign in to get notified about uploads from channels you '
+                  'subscribe to, and comments and replies for you.',
+              actionLabel: 'Sign in',
+              onAction: () => openSignIn(context),
+            )
+          : notifications.when(
+              loading: () => ListView.builder(
+                itemCount: 6,
+                itemBuilder: (context, index) => const _NotificationSkeleton(),
+              ),
+              error: (error, stackTrace) => EmptyState(
+                icon: Symbols.cloud_off,
+                title: "Couldn't load notifications",
+                message: 'Check your internet connection and try again.',
+                actionLabel: 'Retry',
+                onAction: () => ref.invalidate(notificationsProvider),
+              ),
+              data: (list) {
+                if (list.isEmpty) {
+                  return const EmptyState(
+                    icon: Symbols.notifications,
+                    title: 'Your notifications live here',
+                    message:
+                        'Subscribe to channels to hear about their new videos. '
+                        'Comments on your videos and replies to you show up '
+                        'here too.',
+                  );
+                }
+                return ListView.builder(
+                  itemCount: list.length,
+                  itemBuilder: (context, index) {
+                    final n = list[index];
+                    return Dismissible(
+                      key: ValueKey(n.id),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        color: AppColors.brandRed,
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 24),
+                        child: const Icon(Symbols.delete, color: Colors.white),
+                      ),
+                      onDismissed: (_) => _remove(context, ref, n),
+                      child: NotificationTile(
+                        notification: n,
+                        onTap: () => _open(context, ref, n),
+                        onMore: () => _showMenu(context, ref, n),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
     );
   }
 }
 
-class _NotificationTile extends StatelessWidget {
-  const _NotificationTile({
+/// One notification: blue dot (unread), sender's avatar, message, time,
+/// video thumbnail and ⋮.
+class NotificationTile extends StatelessWidget {
+  const NotificationTile({
+    super.key,
     required this.notification,
-    required this.unread,
     required this.onTap,
+    required this.onMore,
   });
 
   final AppNotification notification;
-  final bool unread;
   final VoidCallback onTap;
+  final VoidCallback onMore;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final video = notification.video;
+    final n = notification;
 
     return InkWell(
       onTap: onTap,
@@ -132,26 +242,27 @@ class _NotificationTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Blue dot = new since your last visit.
             SizedBox(
               width: 16,
               height: 48,
               child: Center(
-                child: unread
-                    ? Container(
+                child: n.read
+                    ? null
+                    : Container(
+                        key: const ValueKey('unread-dot'),
                         width: 6,
                         height: 6,
                         decoration: const BoxDecoration(
                           color: Color(0xFF3EA6FF),
                           shape: BoxShape.circle,
                         ),
-                      )
-                    : null,
+                      ),
               ),
             ),
             ChannelAvatar(
-              name: video.channelName,
-              imageUrl: video.channelAvatarUrl,
+              name: n.fromName,
+              imageUrl: n.fromAvatarUrl,
+              color: avatarColorOrNull(n.fromAvatarColor),
               size: 48,
             ),
             const SizedBox(width: 12),
@@ -160,17 +271,18 @@ class _NotificationTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    notification.text,
+                    n.message,
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.body.copyWith(
                       color: colors.textPrimary,
                       fontSize: 14,
+                      fontWeight: n.read ? FontWeight.w400 : FontWeight.w500,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    timeAgo(notification.time),
+                    timeAgo(n.createdAt),
                     style: AppTextStyles.meta.copyWith(
                       color: colors.textSecondary,
                     ),
@@ -184,21 +296,13 @@ class _NotificationTile extends StatelessWidget {
               child: SizedBox(
                 width: 112,
                 height: 63,
-                child: NetworkThumbnail(url: video.thumbnailUrl),
+                child: NetworkThumbnail(url: n.thumbnailUrl),
               ),
             ),
             IconButton(
               tooltip: 'More actions',
               visualDensity: VisualDensity.compact,
-              onPressed: () => ScaffoldMessenger.of(context)
-                ..hideCurrentSnackBar()
-                ..showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Notification settings are not part of this demo',
-                    ),
-                  ),
-                ),
+              onPressed: onMore,
               icon: const Icon(Symbols.more_vert, size: 20),
             ),
           ],

@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/avatar_colors.dart';
@@ -167,7 +168,11 @@ class UserRepository {
     final count = (snapshot.data()?['subscriberCount'] as num?)?.toInt() ?? 0;
     final batch = _db.batch();
     if (subscribed) {
-      batch.set(doc, {'addedAt': FieldValue.serverTimestamp()});
+      batch.set(doc, {
+        'addedAt': FieldValue.serverTimestamp(),
+        // Lets the channel find its subscribers (to notify them of uploads).
+        'channelId': channelId,
+      });
     } else {
       batch.delete(doc);
     }
@@ -189,8 +194,32 @@ class UserRepository {
         .orderBy('addedAt', descending: true)
         .limit(maxSubscriptions)
         .snapshots()
-        .map((snapshot) => [for (final doc in snapshot.docs) doc.id]);
+        .map((snapshot) {
+          _fillMissingChannelIds(snapshot.docs);
+          return [for (final doc in snapshot.docs) doc.id];
+        });
   }
+
+  /// Subscriptions from before Phase 17 have no `channelId` field, so their
+  /// channel can't find them to send upload notifications. Fill it in once
+  /// (the rules allow adding exactly this field).
+  void _fillMissingChannelIds(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    for (final doc in docs) {
+      if (doc.data()['channelId'] != null || !_filled.add(doc.reference.path)) {
+        continue;
+      }
+      doc.reference
+          .update({'channelId': doc.id})
+          .catchError(
+            (Object e) => debugPrint('SUBSCRIPTIONS: fill failed: $e'),
+          );
+    }
+  }
+
+  /// Subscription documents we already tried to fill in this session.
+  static final _filled = <String>{};
 
   /// The Subscriptions tab shows up to this many channels.
   static const int maxSubscriptions = 50;

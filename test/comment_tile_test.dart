@@ -51,6 +51,25 @@ void main() {
     expect(find.textContaining('(edited)'), findsOneWidget);
   });
 
+  testWidgets('a comment opened from a notification is highlighted', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        CommentTile(
+          comment: _comment(),
+          liked: false,
+          onLike: (_) {},
+          onReply: () {},
+          onOpenChannel: () {},
+          creatorName: 'Creator',
+          highlighted: true,
+        ),
+      ),
+    );
+    expect(find.text('Highlighted comment'), findsOneWidget);
+  });
+
   testWidgets('a pinned comment says who pinned it', (tester) async {
     await tester.pumpWidget(_tile(pinned: true));
     expect(find.text('Pinned by Creator'), findsOneWidget);

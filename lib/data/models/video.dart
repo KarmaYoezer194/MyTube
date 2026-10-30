@@ -143,13 +143,14 @@ class Video {
   }
 
   Video copyWith({
+    String? id,
     int? durationSeconds,
     int? views,
     int? likes,
     int? subscriberCount,
   }) {
     return Video(
-      id: id,
+      id: id ?? this.id,
       title: title,
       description: description,
       videoUrl: videoUrl,

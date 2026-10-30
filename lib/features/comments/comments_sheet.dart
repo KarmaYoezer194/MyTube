@@ -14,6 +14,7 @@ import '../../data/models/channel.dart';
 import '../../data/models/comment.dart';
 import '../../data/models/video.dart';
 import '../../data/repositories/comment_repository.dart';
+import '../../data/repositories/notification_repository.dart';
 import '../../data/repositories/paged_comments.dart';
 import '../../data/repositories/user_repository.dart';
 import '../../data/repositories/video_repository.dart';
@@ -23,26 +24,50 @@ import 'widgets/comment_tile.dart';
 
 /// Opens the comments of a video in a bottom sheet you can drag taller or
 /// shorter (or down to close).
-Future<void> showCommentsSheet(BuildContext context, String videoId) {
+///
+/// From a notification, [highlightCommentId] is shown at the top as
+/// "Highlighted comment" (with its replies open if [openReplies]).
+/// [useRootNavigator] puts the sheet above the player too.
+Future<void> showCommentsSheet(
+  BuildContext context,
+  String videoId, {
+  String? highlightCommentId,
+  bool openReplies = false,
+  bool useRootNavigator = false,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
+    useRootNavigator: useRootNavigator,
     builder: (_) => DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.7,
       minChildSize: 0.4,
       maxChildSize: 0.95,
-      builder: (context, scrollController) =>
-          _CommentsSheet(videoId: videoId, scrollController: scrollController),
+      builder: (context, scrollController) => _CommentsSheet(
+        videoId: videoId,
+        scrollController: scrollController,
+        highlightCommentId: highlightCommentId ?? '',
+        openReplies: openReplies,
+      ),
     ),
   );
 }
 
 class _CommentsSheet extends ConsumerStatefulWidget {
-  const _CommentsSheet({required this.videoId, required this.scrollController});
+  const _CommentsSheet({
+    required this.videoId,
+    required this.scrollController,
+    this.highlightCommentId = '',
+    this.openReplies = false,
+  });
 
   final String videoId;
+
+  /// Shown at the top ('' = none).
+  final String highlightCommentId;
+  final bool openReplies;
 
   /// Given by DraggableScrollableSheet: scrolling the list at its top
   /// drags the whole sheet.
@@ -75,6 +100,14 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
   final _deleted = <String>{};
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.openReplies && widget.highlightCommentId.isNotEmpty) {
+      _expanded.add(widget.highlightCommentId);
+    }
+  }
+
+  @override
   void dispose() {
     _input.dispose();
     _focus.dispose();
@@ -93,12 +126,13 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
   /// Finds a loaded comment (not a reply) by id.
   Comment? _findComment(String id) {
     if (_changed[id] case final changed?) return changed;
+    // The pinned and the highlighted comment are loaded on their own.
     final pinnedId = _video?.pinnedCommentId ?? '';
-    if (pinnedId == id) {
-      final pinned = ref
+    if (id == pinnedId || id == widget.highlightCommentId) {
+      final single = ref
           .read(pinnedCommentProvider((videoId: _videoId, commentId: id)))
           .value;
-      if (pinned != null) return pinned;
+      if (single != null) return single;
     }
     for (final comment in ref.read(commentListProvider(_listArg)).items) {
       if (comment.id == id) return comment;
@@ -193,6 +227,20 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
             .addComment(videoId: _videoId, author: author, text: text)
             .timeout(const Duration(seconds: 15));
         _clearInput();
+        // Tell the video's uploader (not needed for my own videos).
+        final video = _video;
+        if (video != null &&
+            shouldNotify(receiverUid: video.uploaderUid, myUid: author.uid)) {
+          ref
+              .read(notificationRepositoryProvider)
+              .notifyComment(
+                video: video,
+                me: author,
+                commentId: comment.id,
+                text: text,
+              )
+              .catchError((Object e) => debugPrint('NOTIFY comment: $e'));
+        }
         // Show it on top: in Newest, or switch to Newest (which then
         // loads fresh and already includes it).
         if (_sort == CommentSort.newest) {
@@ -219,8 +267,26 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
             )
             .timeout(const Duration(seconds: 15));
         _clearInput();
-        if (_findComment(parentId) case final parent?) {
+        final parent = _findComment(parentId);
+        if (parent != null) {
           _remember(parent.copyWith(replyCount: parent.replyCount + 1));
+        }
+        // Tell the comment's author.
+        final video = _video;
+        if (video != null &&
+            parent != null &&
+            shouldNotify(receiverUid: parent.uid, myUid: author.uid)) {
+          ref
+              .read(notificationRepositoryProvider)
+              .notifyReply(
+                video: video,
+                me: author,
+                commentAuthorUid: parent.uid,
+                commentId: parentId,
+                replyId: reply.id,
+                text: text,
+              )
+              .catchError((Object e) => debugPrint('NOTIFY reply: $e'));
         }
         if (_expanded.contains(parentId)) {
           ref
@@ -427,7 +493,12 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
   // ---------------- Building ----------------
 
   /// One comment or reply row, wired to the actions above.
-  Widget _tile(BuildContext context, Comment loaded, {bool pinned = false}) {
+  Widget _tile(
+    BuildContext context,
+    Comment loaded, {
+    bool pinned = false,
+    bool highlighted = false,
+  }) {
     final comment = _latest(loaded);
     final video = ref.watch(videoProvider(_videoId)).value;
     final likedIds =
@@ -439,10 +510,14 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
     final canPin = isOwner && !comment.isReply;
 
     return CommentTile(
-      key: ValueKey('${pinned ? 'pinned-' : ''}${comment.id}'),
+      key: ValueKey(
+        '${pinned ? 'pinned-' : ''}${highlighted ? 'highlighted-' : ''}'
+        '${comment.id}',
+      ),
       comment: comment,
       liked: likedIds.contains(comment.id),
       pinned: pinned,
+      highlighted: highlighted,
       creatorName: video?.channelName ?? '',
       byCreator: video != null && comment.uid == video.uploaderUid,
       onLike: (liked) => _like(context, comment, liked),
@@ -465,13 +540,18 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
   }
 
   /// A comment, its "N replies" toggle and (when open) its replies.
-  Widget _thread(BuildContext context, Comment loaded, {bool pinned = false}) {
+  Widget _thread(
+    BuildContext context,
+    Comment loaded, {
+    bool pinned = false,
+    bool highlighted = false,
+  }) {
     final comment = _latest(loaded);
     final expanded = _expanded.contains(comment.id);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _tile(context, comment, pinned: pinned),
+        _tile(context, comment, pinned: pinned, highlighted: highlighted),
         if (comment.replyCount > 0 || expanded)
           RepliesToggle(
             count: comment.replyCount,
@@ -512,8 +592,29 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
               )
               .value;
     final showPinned = pinned != null && !_deleted.contains(pinned.id);
+    // From a notification: that comment first (unless it's the pinned one).
+    final highlightId = widget.highlightCommentId == pinnedId
+        ? ''
+        : widget.highlightCommentId;
+    final highlighted = highlightId.isEmpty
+        ? null
+        : ref
+              .watch(
+                pinnedCommentProvider((
+                  videoId: _videoId,
+                  commentId: highlightId,
+                )),
+              )
+              .value;
+    final showHighlighted =
+        highlighted != null && !_deleted.contains(highlighted.id);
     final comments = page.items
-        .where((c) => c.id != pinnedId && !_deleted.contains(c.id))
+        .where(
+          (c) =>
+              c.id != pinnedId &&
+              c.id != highlightId &&
+              !_deleted.contains(c.id),
+        )
         .toList();
     final isSignedIn = ref.watch(isSignedInProvider);
     // Guests show the grey "person" avatar next to the comment box.
@@ -611,7 +712,10 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
                                 ref.invalidate(commentListProvider(_listArg)),
                           ),
                         )
-                      else if (comments.isEmpty && !showPinned && !page.hasMore)
+                      else if (comments.isEmpty &&
+                          !showPinned &&
+                          !showHighlighted &&
+                          !page.hasMore)
                         SliverFillRemaining(
                           hasScrollBody: false,
                           child: EmptyState(
@@ -631,6 +735,14 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
                           ),
                         )
                       else ...[
+                        if (showHighlighted)
+                          SliverToBoxAdapter(
+                            child: _thread(
+                              context,
+                              highlighted,
+                              highlighted: true,
+                            ),
+                          ),
                         if (showPinned)
                           SliverToBoxAdapter(
                             child: _thread(context, pinned, pinned: true),

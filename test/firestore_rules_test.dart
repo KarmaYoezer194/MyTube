@@ -66,6 +66,32 @@ void main() {
     );
   });
 
+  test('notifications: only for real events, only the receiver reads', () {
+    expect(code, contains('match /notifications/{notificationId}'));
+    expect(
+      code,
+      contains("notificationId == 'u_' + request.resource.data.videoId"),
+    );
+    expect(
+      code,
+      contains("notificationId == 'c_' + request.resource.data.commentId"),
+    );
+    expect(
+      code,
+      contains("notificationId == 'r_' + request.resource.data.replyId"),
+    );
+    expect(
+      code,
+      contains("allow update: if isMe(uid) && onlyChanges(['read'])"),
+    );
+    // A channel may only list its OWN subscribers.
+    expect(code, contains('match /{path=**}/subscribed/{channelId}'));
+    expect(
+      code,
+      contains("resource.data.channelId == 'user-' + request.auth.uid"),
+    );
+  });
+
   test('guests can still keep history and add views', () {
     expect(code, contains('match /history/{videoId}'));
     expect(code, contains("onlyChanges(['views'])"));
