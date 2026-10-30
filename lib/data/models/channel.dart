@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/avatar_colors.dart';
+import '../../core/utils/search_keywords.dart';
 import 'app_user.dart';
 import 'video.dart';
 
@@ -25,6 +26,7 @@ class Channel {
     required this.subscriberCount,
     required this.ownerUid,
     required this.createdAt,
+    this.hasKeywords = true,
   });
 
   final String id;
@@ -76,8 +78,15 @@ class Channel {
       subscriberCount: (data['subscriberCount'] as num?)?.toInt() ?? 0,
       ownerUid: data['ownerUid'] as String? ?? '',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      hasKeywords: data['keywords'] is List,
     );
   }
+
+  /// false for channels from before Phase 18 (no search keywords yet).
+  final bool hasKeywords;
+
+  /// Search keywords for the current name and @handle.
+  List<String> get keywords => channelKeywords(name: name, handle: handle);
 
   factory Channel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) =>
       Channel.fromMap(doc.id, doc.data() ?? const {});
@@ -131,6 +140,7 @@ class Channel {
       'subscriberCount': subscriberCount,
       'ownerUid': ownerUid,
       'createdAt': FieldValue.serverTimestamp(),
+      'keywords': keywords,
     };
   }
 }

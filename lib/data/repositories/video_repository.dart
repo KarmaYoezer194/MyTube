@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/video.dart';
@@ -26,10 +27,69 @@ class VideoRepository {
   /// because that needs no extra Firestore indexes and the demo has few
   /// videos.
   Stream<List<Video>> watchAllVideos() {
-    return _videos
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map(Video.fromFirestore).toList());
+    return _videos.orderBy('createdAt', descending: true).snapshots().map((
+      snapshot,
+    ) {
+      final videos = snapshot.docs.map(Video.fromFirestore).toList();
+      _fillMissingKeywords(videos);
+      return videos;
+    });
+  }
+
+  /// Videos from before Phase 18 have no search keywords. The first person
+  /// who loads one fills them in, once (the rules allow adding just this
+  /// field while it is missing).
+  void _fillMissingKeywords(List<Video> videos) {
+    for (final video in videos) {
+      if (video.hasKeywords || !_keywordsFilled.add(video.id)) continue;
+      _videos
+          .doc(video.id)
+          .update({'keywords': video.keywords})
+          .catchError((Object e) => debugPrint('VIDEO keywords: $e'));
+    }
+  }
+
+  static final _keywordsFilled = <String>{};
+
+  // ---------------- Page-by-page lists (Discovery) ----------------
+
+  /// Home: public long videos, newest first. [category] null = all;
+  /// [since] = only videos uploaded after it ("Recently uploaded").
+  Query<Map<String, dynamic>> homeQuery({String? category, DateTime? since}) {
+    var query = _videos
+        .where('visibility', isEqualTo: 'public')
+        .where('isShort', isEqualTo: false);
+    if (category != null) query = query.where('category', isEqualTo: category);
+    if (since != null) {
+      query = query.where(
+        'createdAt',
+        isGreaterThan: Timestamp.fromDate(since),
+      );
+    }
+    return query.orderBy('createdAt', descending: true);
+  }
+
+  /// Explore / Trending: public long videos, most viewed first.
+  Query<Map<String, dynamic>> trendingQuery({String? category}) {
+    var query = _videos
+        .where('visibility', isEqualTo: 'public')
+        .where('isShort', isEqualTo: false);
+    if (category != null) query = query.where('category', isEqualTo: category);
+    return query.orderBy('views', descending: true);
+  }
+
+  /// Search: public videos with a word starting with [term]. [shorts]
+  /// null = videos and Shorts. [byViews] sorts by views, else newest first.
+  Query<Map<String, dynamic>> searchQuery(
+    String term, {
+    bool? shorts,
+    bool byViews = false,
+  }) {
+    var query = _videos
+        .where('keywords', arrayContains: term)
+        .where('visibility', isEqualTo: 'public');
+    if (shorts != null) query = query.where('isShort', isEqualTo: shorts);
+    return query.orderBy(byViews ? 'views' : 'createdAt', descending: true);
   }
 
   /// Saves the real length, measured by the player the first time a video
@@ -52,6 +112,7 @@ class VideoRepository {
     required String description,
     required String category,
     required String visibility,
+    required List<String> keywords,
     String? thumbnailUrl,
   }) {
     return _videos.doc(id).update({
@@ -59,6 +120,7 @@ class VideoRepository {
       'description': description,
       'category': category,
       'visibility': visibility,
+      'keywords': keywords,
       'thumbnailUrl': ?thumbnailUrl,
     });
   }

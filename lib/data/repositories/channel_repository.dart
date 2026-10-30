@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/app_user.dart';
+import '../../core/utils/search_keywords.dart';
 import '../models/channel.dart';
 import '../models/video.dart';
 import 'user_repository.dart';
@@ -30,11 +31,32 @@ class ChannelRepository {
 
   /// One channel, live. null if it has no document.
   Stream<Channel?> watchChannel(String channelId) {
-    return _channels
-        .doc(channelId)
-        .snapshots()
-        .map((doc) => doc.exists ? Channel.fromFirestore(doc) : null);
+    return _channels.doc(channelId).snapshots().map((doc) {
+      if (!doc.exists) return null;
+      final channel = Channel.fromFirestore(doc);
+      if (!channel.hasKeywords) _fillKeywords(channel);
+      return channel;
+    });
   }
+
+  /// Channels from before Phase 18 have no search keywords. The first
+  /// person who sees one fills them in, once (the rules allow adding just
+  /// this field while it is missing).
+  void _fillKeywords(Channel channel) {
+    if (!_keywordsFilled.add(channel.id)) return;
+    _channels
+        .doc(channel.id)
+        .update({'keywords': channel.keywords})
+        .catchError((Object e) => debugPrint('CHANNEL keywords: $e'));
+  }
+
+  static final _keywordsFilled = <String>{};
+
+  /// Channels whose name or @handle has a word starting with [term]
+  /// (search), most subscribers first.
+  Query<Map<String, dynamic>> searchQuery(String term) => _channels
+      .where('keywords', arrayContains: term)
+      .orderBy('subscriberCount', descending: true);
 
   /// Several channels at once (one query per 30 ids). Missing ones are
   /// simply left out.
@@ -170,6 +192,7 @@ class ChannelRepository {
       'description': description,
       'bannerUrl': bannerUrl,
       'avatarColor': avatarColor,
+      'keywords': channelKeywords(name: name, handle: handle),
     });
 
     if (handle != current.handle) {
@@ -189,9 +212,16 @@ class ChannelRepository {
           .limit(450)
           .get();
       for (final doc in mine.docs) {
+        final video = Video.fromFirestore(doc);
         batch.update(doc.reference, {
           'channelName': name,
           'channelAvatarColor': avatarColor,
+          // The channel name is part of the video's search keywords.
+          'keywords': videoKeywords(
+            title: video.title,
+            channelName: name,
+            category: video.category,
+          ),
         });
       }
     }

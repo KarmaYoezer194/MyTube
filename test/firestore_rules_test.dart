@@ -92,6 +92,12 @@ void main() {
     );
   });
 
+  test('search keywords: owners update them, old documents fill in once', () {
+    expect(code, contains('function isKeywordsFillIn()'));
+    expect(code, contains("!('keywords' in resource.data)"));
+    expect(code, contains('value.size() <= 200'));
+  });
+
   test('guests can still keep history and add views', () {
     expect(code, contains('match /history/{videoId}'));
     expect(code, contains("onlyChanges(['views'])"));

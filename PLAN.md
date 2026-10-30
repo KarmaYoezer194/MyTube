@@ -49,7 +49,7 @@ Claude builds ONE phase when asked, then stops (see CLAUDE.md).
   - Real unread count, read/unread, tap to open, swipe or menu to remove.
   - Explain the limits of doing this without Cloud Functions.
 
-- [ ] **Phase 18 — Discovery**
+- [x] **Phase 18 — Discovery**
   - Keyword prefix search with filters (All / Videos / Shorts / Channels)
     and sort (relevance / date / views), plus channel results.
   - Explore / Trending.
@@ -96,6 +96,7 @@ Format: `- [ ] (Phase X) What to do — where — why`
 - [ ] (Phase 15) Deploy the rules and the 2 new playlist indexes: `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — until then creating playlists fails ("Couldn't create the playlist"), and your playlists / a channel's Playlists tab stay empty or show an error until the indexes finish building (a few minutes). (If you haven't done the Phase 14 deploy yet, this one command covers both.)
 - [ ] (Phase 16, whenever you delete a video in Studio) Delete its file in Cloudinary too — console.cloudinary.com → Media Library → search the name shown in the delete dialog (it has a Copy button) → select → Delete — the app can't do it (that needs the API secret, which must never be in the app), and leftover files use your free storage. No rules deploy is needed for Phase 16.
 - [ ] (Phase 17) Deploy the rules and the new subscribers index: `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — until then no notifications are sent (the writes are refused) and uploads can't find their subscribers. The "subscribed.channelId" index takes a few minutes to build. (Covers the Phase 14/15 deploys too if they're still open.)
+- [ ] (Phase 18) Deploy the rules and the 9 new indexes: `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — Home, Explore and search load from Firestore now, so until the indexes are **built** (Firebase console → Firestore Database → Indexes → all "Enabled"; a few minutes) they show "Couldn't load videos" / "Couldn't search", and the old videos can't get their search keywords. (One command covers every earlier open deploy too.)
 
 ## Progress log
 
@@ -276,3 +277,42 @@ Newest entry at the bottom.
   model (copyWith id), firestore.rules, firestore.indexes.json (field
   override for the collection-group query). Tests:
   test/notification_test.dart, comment tile + rules checks (110 tests).
+- 2026-10-30 — **Phase 18 (Discovery) done.** Search without a search
+  server: videos and channels store `keywords` (every word's beginnings, up
+  to 15 letters, max 200; video = title + channel name + category, channel
+  = name + @handle). Search asks Firestore for the longest typed word
+  (`array-contains`) and checks the other words in the app; filters All /
+  Videos / Shorts / Channels; sort Relevance (best title match first among
+  what's loaded), Upload date, View count; "All" shows the 2 best channels
+  on top; channel rows have Subscribe. Keywords are saved on upload, on
+  Studio edit and on channel rename; older videos / channels get them
+  filled in once by the first person who loads them (the rules allow
+  adding only that field while it's missing). Home now loads page by page
+  from Firestore (newest first; chips = category or "Recently uploaded",
+  pull to refresh; restarted after an upload / delete) with a "Recommended
+  for you" shelf on All. Explore page (Explore chip): Trending = most viewed,
+  or one category, ranked #1, #2, … page by page. Recommendations (Home
+  shelf + Up next) use a simple score: same channel / category as the
+  current video, channels I subscribe to, categories I watch most, not
+  watched yet, popularity — all from data the app already has. ⋮ → Not
+  interested (now remembered) and new "Don't recommend channel"; hidden
+  items leave Home, Shorts shelf, Explore, search, suggestions and Up next;
+  Settings → "Show hidden videos and channels again". Infinite scroll:
+  Home, Explore, search (+ channel pages, Subscriptions, comments from
+  before).
+  Files: new lib/core/utils/search_keywords.dart, lib/features/discovery/
+  (discovery_providers, hidden_content, recommendations, explore_screen),
+  lib/features/home/widgets/recommended_shelf.dart; changed video + channel
+  models (keywords, hasKeywords), video_repository (fill-in + Home /
+  Trending / search queries, keywords on edit), channel_repository (fill-in,
+  search query, keywords on rename), seed_videos, home_providers,
+  home_screen, home_chips_bar, search_screen (+ ChannelResultRow),
+  search_providers (old in-app search removed), watch_providers (Up next),
+  video_options_sheet, settings_screen, upload_screen, edit_video_screen,
+  delete_video, app_router, firestore.rules, firestore.indexes.json
+  (13 indexes). Tests: test/discovery_test.dart + rules check (129 tests).
+  Known limits: prefix search only (no typos / middle-of-word matches);
+  "Relevance" can only reorder what has been loaded; Trending = most viewed
+  (not "views this week" — that needs a server); hidden items are per
+  browser; the watch page / player still use the full video list (Phase 21
+  performance).

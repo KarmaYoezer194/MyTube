@@ -4,9 +4,20 @@ import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/text_styles.dart';
+import '../../core/utils/format_views.dart';
+import '../../core/widgets/category_chip.dart';
+import '../../core/widgets/channel_avatar.dart';
 import '../../core/widgets/compact_video_row.dart';
 import '../../core/widgets/empty_state.dart';
+import '../../core/widgets/paged_footer.dart';
+import '../../core/widgets/subscribe_button.dart';
+import '../../data/models/channel.dart';
+import '../../data/models/video.dart';
 import '../../data/repositories/video_repository.dart';
+import '../channel/channel_navigation.dart';
+import '../discovery/discovery_providers.dart';
+import '../discovery/hidden_content.dart';
 import 'search_providers.dart';
 
 /// Search: type in the box to see recent searches and suggestions; press
@@ -24,6 +35,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   /// The search that was submitted. null = still typing (show suggestions).
   String? _query;
+
+  SearchFilter _filter = SearchFilter.all;
+  SearchSort _sort = SearchSort.relevance;
 
   @override
   void dispose() {
@@ -161,7 +175,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         .watch(recentSearchesProvider)
         .where((s) => s.toLowerCase().contains(typed))
         .toList();
-    final videos = ref.watch(allVideosProvider).value ?? const [];
+    final taste = ref.watch(tasteProfileProvider);
+    final videos = [
+      for (final video in ref.watch(allVideosProvider).value ?? const <Video>[])
+        if (!taste.hides(video)) video,
+    ];
     final suggestions = searchSuggestions(videos, typed)
         .where((s) => !recents.any((r) => r.toLowerCase() == s.toLowerCase()))
         .toList();
@@ -197,41 +215,220 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
-  /// After searching: the matching videos as compact rows.
+  /// After searching: filter chips + sort, then channels and videos,
+  /// loaded page by page from Firestore.
   Widget _buildResults(String query) {
-    return ref
-        .watch(allVideosProvider)
-        .when(
-          loading: () => ListView.builder(
-            itemCount: 6,
-            itemBuilder: (context, index) => const CompactVideoRowSkeleton(),
+    final colors = context.colors;
+    return Column(
+      children: [
+        SizedBox(
+          height: 48,
+          child: Row(
+            children: [
+              Expanded(
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+                  children: [
+                    for (final filter in SearchFilter.values) ...[
+                      CategoryChip(
+                        label: switch (filter) {
+                          SearchFilter.all => 'All',
+                          SearchFilter.videos => 'Videos',
+                          SearchFilter.shorts => 'Shorts',
+                          SearchFilter.channels => 'Channels',
+                        },
+                        selected: _filter == filter,
+                        onTap: () => setState(() => _filter = filter),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ],
+                ),
+              ),
+              if (_filter != SearchFilter.channels)
+                PopupMenuButton<SearchSort>(
+                  tooltip: 'Sort by',
+                  initialValue: _sort,
+                  icon: Icon(Symbols.tune, color: colors.textPrimary),
+                  onSelected: (sort) => setState(() => _sort = sort),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: SearchSort.relevance,
+                      child: Text('Relevance'),
+                    ),
+                    PopupMenuItem(
+                      value: SearchSort.date,
+                      child: Text('Upload date'),
+                    ),
+                    PopupMenuItem(
+                      value: SearchSort.views,
+                      child: Text('View count'),
+                    ),
+                  ],
+                ),
+            ],
           ),
+        ),
+        Expanded(
+          child: _filter == SearchFilter.channels
+              ? _channelResults(query)
+              : _videoResults(query),
+        ),
+      ],
+    );
+  }
+
+  Widget _channelResults(String query) {
+    return ref
+        .watch(searchChannelsProvider(query))
+        .when(
+          loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, stackTrace) => EmptyState(
             icon: Symbols.cloud_off,
-            title: "Couldn't search",
+            title: "Couldn't search channels",
             message: 'Check your internet connection and try again.',
             actionLabel: 'Retry',
-            onAction: () => ref.invalidate(allVideosProvider),
+            onAction: () => ref.invalidate(searchChannelsProvider(query)),
           ),
-          data: (videos) {
-            final results = searchVideos(videos, query);
-            if (results.isEmpty) {
-              return EmptyState(
-                icon: Symbols.search_off,
-                title: 'No results found',
-                message: 'Try different keywords for "$query".',
-              );
-            }
-            return ListView.builder(
-              padding: const EdgeInsets.only(top: 4, bottom: 16),
-              itemCount: results.length,
-              itemBuilder: (context, index) => CompactVideoRow(
-                key: ValueKey(results[index].id),
-                video: results[index],
-              ),
-            );
-          },
+          data: (channels) => channels.isEmpty
+              ? EmptyState(
+                  icon: Symbols.search_off,
+                  title: 'No channels found',
+                  message: 'No channel name or handle starts with "$query".',
+                )
+              : ListView(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  children: [
+                    for (final channel in channels)
+                      ChannelResultRow(
+                        key: ValueKey(channel.id),
+                        channel: channel,
+                      ),
+                  ],
+                ),
         );
+  }
+
+  Widget _videoResults(String query) {
+    final arg = (query: query, filter: _filter, sort: _sort);
+    final page = ref.watch(searchVideosProvider(arg));
+    final controller = ref.read(searchVideosProvider(arg).notifier);
+    final videos = visibleSearchResults(
+      page.items,
+      query,
+      _sort,
+      ref.watch(tasteProfileProvider),
+    );
+    // "All" also shows the best matching channels on top.
+    final channels = _filter == SearchFilter.all
+        ? (ref.watch(searchChannelsProvider(query)).value ?? const <Channel>[])
+              .take(2)
+              .toList()
+        : const <Channel>[];
+
+    // A page where nothing matched every word: load the next one.
+    if (videos.isEmpty &&
+        page.items.isNotEmpty &&
+        page.hasMore &&
+        !page.isLoading &&
+        page.error == null) {
+      Future.microtask(controller.loadMore);
+    }
+
+    if (page.isFirstLoad) {
+      return ListView.builder(
+        itemCount: 6,
+        itemBuilder: (context, index) => const CompactVideoRowSkeleton(),
+      );
+    }
+    if (page.items.isEmpty && page.error != null) {
+      return EmptyState(
+        icon: Symbols.cloud_off,
+        title: "Couldn't search",
+        message: 'Check your internet connection and try again.',
+        actionLabel: 'Retry',
+        onAction: () => ref.invalidate(searchVideosProvider(arg)),
+      );
+    }
+    if (videos.isEmpty && channels.isEmpty && !page.hasMore) {
+      return EmptyState(
+        icon: Symbols.search_off,
+        title: 'No results found',
+        message: 'Try different keywords for "$query".',
+      );
+    }
+    return NotificationListener<ScrollNotification>(
+      onNotification: (n) => loadMoreWhenNearEnd(n, controller.loadMore),
+      child: ListView(
+        padding: const EdgeInsets.only(bottom: 16),
+        children: [
+          for (final channel in channels)
+            ChannelResultRow(key: ValueKey(channel.id), channel: channel),
+          if (channels.isNotEmpty) const Divider(),
+          for (final video in videos)
+            CompactVideoRow(key: ValueKey(video.id), video: video),
+          PagedFooter(page: page, onRetry: controller.loadMore),
+        ],
+      ),
+    );
+  }
+}
+
+/// A channel in the search results: avatar, name, @handle · subscribers,
+/// Subscribe. Tap = the channel page.
+class ChannelResultRow extends ConsumerWidget {
+  const ChannelResultRow({super.key, required this.channel});
+
+  final Channel channel;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
+    return InkWell(
+      onTap: () => openChannel(context, ref, channel.id),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
+        child: Row(
+          children: [
+            ChannelAvatar(
+              name: channel.name,
+              imageUrl: channel.avatarUrl,
+              color: channel.avatarColorValue,
+              size: 56,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    channel.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.videoTitle.copyWith(
+                      fontSize: 15,
+                      color: colors.textPrimary,
+                    ),
+                  ),
+                  Text(
+                    '${channel.handle} · '
+                    '${formatSubscribers(channel.subscriberCount)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.meta.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            SubscribeButton(channelId: channel.id, channelName: channel.name),
+          ],
+        ),
+      ),
+    );
   }
 }
 

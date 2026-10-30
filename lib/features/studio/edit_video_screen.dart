@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/text_styles.dart';
+import '../../core/utils/search_keywords.dart';
 import '../../core/utils/upload_validation.dart';
 import '../../core/widgets/network_thumbnail.dart';
 import '../../data/models/video.dart';
@@ -108,6 +109,12 @@ class _EditVideoScreenState extends ConsumerState<EditVideoScreen> {
             description: _description.text.trim(),
             category: _category,
             visibility: _visibility,
+            // A new title or category changes what search finds.
+            keywords: videoKeywords(
+              title: _title.text.trim(),
+              channelName: widget.video.channelName,
+              category: _category,
+            ),
             thumbnailUrl: thumbnailUrl,
           )
           .timeout(const Duration(seconds: 15));

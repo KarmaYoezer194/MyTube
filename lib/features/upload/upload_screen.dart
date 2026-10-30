@@ -16,6 +16,7 @@ import '../../core/utils/upload_validation.dart';
 import '../../data/models/video.dart';
 import '../../data/repositories/notification_repository.dart';
 import '../../data/repositories/upload_repository.dart';
+import '../discovery/discovery_providers.dart';
 import 'upload_flow.dart';
 
 const List<String> uploadCategories = [
@@ -221,6 +222,9 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
         visibility: _visibility,
       );
       final id = await repository.saveVideo(newVideo);
+      // Home loads page by page (not live): start it again so the new
+      // video is at the top.
+      ref.invalidate(homeFeedProvider);
 
       // 4. Tell my subscribers (public uploads only). This keeps running
       // after this screen closes.

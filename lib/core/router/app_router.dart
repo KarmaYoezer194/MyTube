@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/channel/channel_screen.dart';
+import '../../features/discovery/explore_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../data/models/playlist.dart';
 import '../../features/playlists/playlist_screen.dart';
@@ -44,6 +45,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'search',
                     builder: (context, state) => const SearchScreen(),
+                  ),
+                  GoRoute(
+                    path: 'explore',
+                    builder: (context, state) => const ExploreScreen(),
                   ),
                   GoRoute(
                     path: 'notifications',

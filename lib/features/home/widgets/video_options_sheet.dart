@@ -24,7 +24,10 @@ class VideoMenuAction {
 }
 
 /// The ⋮ menu of a video: [extraActions], Save to Watch later, Save to
-/// playlist, Share, Not interested.
+/// playlist, Share, Not interested, Don't recommend channel.
+///
+/// Hidden videos and channels stay out of Home, Explore, search and Up
+/// next (saved in this browser; Settings can bring them back).
 Future<void> showVideoOptionsSheet(
   BuildContext context,
   WidgetRef ref,
@@ -35,6 +38,7 @@ Future<void> showVideoOptionsSheet(
   // removed widget can't use `ref` or `context` any more.
   final messenger = ScaffoldMessenger.of(context);
   final notInterested = ref.read(notInterestedProvider.notifier);
+  final hiddenChannels = ref.read(hiddenChannelsProvider.notifier);
   final repository = ref.read(userRepositoryProvider);
 
   void showMessage(String text, {SnackBarAction? action}) {
@@ -127,6 +131,24 @@ Future<void> showVideoOptionsSheet(
               );
             },
           ),
+          // Sample channels and other people's channels (not my own).
+          if (video.channelId.isNotEmpty &&
+              video.uploaderUid != ref.read(currentUidProvider))
+            ListTile(
+              leading: const Icon(Symbols.do_not_disturb_on),
+              title: const Text("Don't recommend channel"),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                hiddenChannels.hide(video.channelId);
+                showMessage(
+                  "We won't recommend ${video.channelName} to you again",
+                  action: SnackBarAction(
+                    label: 'Undo',
+                    onPressed: () => hiddenChannels.undo(video.channelId),
+                  ),
+                );
+              },
+            ),
           const SizedBox(height: 8),
         ],
       ),

@@ -2,7 +2,8 @@ rules_version = '2';
 
 // MyTube security rules (Phase 12: final rules; Phase 13: channels;
 // Phase 14: replies, comment counters, edit, pin and creator heart;
-// Phase 15: playlists; Phase 17: notifications).
+// Phase 15: playlists; Phase 17: notifications; Phase 18: search
+// keywords).
 //
 // There is no server (free Spark plan, no Cloud Functions), so the app does
 // the "server" work itself and THESE RULES are what keeps it honest:
@@ -107,6 +108,19 @@ service cloud.firestore {
     function handleIsMineAfter(handle) {
       return existsAfter(handleDoc(handle)) &&
         getAfter(handleDoc(handle)).data.uid == request.auth.uid;
+    }
+
+    // Search keywords (word beginnings, see search_keywords.dart).
+    function isKeywords(value) {
+      return value is list && value.size() <= 200;
+    }
+
+    // Documents from before Phase 18 have no keywords: anyone who sees
+    // one may add them, once (only while the field is missing).
+    function isKeywordsFillIn() {
+      return signedIn() && onlyChanges(['keywords']) &&
+        !('keywords' in resource.data) &&
+        isKeywords(request.resource.data.keywords);
     }
 
     // A color saved as a number, like 0xFFD81B60.
@@ -443,7 +457,8 @@ service cloud.firestore {
       }
       function channelKeys() {
         return ['name', 'handle', 'description', 'bannerUrl', 'avatarUrl',
-          'avatarColor', 'subscriberCount', 'ownerUid', 'createdAt'];
+          'avatarColor', 'subscriberCount', 'ownerUid', 'createdAt',
+          'keywords'];
       }
       // My profile, as it will be after this request.
       function myProfileAfter() {
@@ -483,7 +498,8 @@ service cloud.firestore {
         // "Edit channel" by its owner (never the subscriber count).
         (isMyAccount(resource.data.ownerUid) &&
           onlyChanges(['name', 'handle', 'description', 'bannerUrl',
-            'avatarColor']) &&
+            'avatarColor', 'keywords']) &&
+          (!changes('keywords') || isKeywords(request.resource.data.keywords)) &&
           request.resource.data.name == myProfileAfter().displayName &&
           request.resource.data.handle == myProfileAfter().handle &&
           request.resource.data.avatarColor == myProfileAfter().avatarColor &&
@@ -501,7 +517,8 @@ service cloud.firestore {
             (request.resource.data.subscriberCount ==
                 resource.data.subscriberCount - 1 &&
               exists(mySubscriptionDoc(channelId)) &&
-              !existsAfter(mySubscriptionDoc(channelId)))));
+              !existsAfter(mySubscriptionDoc(channelId))))) ||
+        isKeywordsFillIn();
 
       allow delete: if false;
     }
@@ -601,7 +618,8 @@ service cloud.firestore {
             'durationSeconds', 'channelId', 'channelName', 'channelAvatarUrl',
             'subscriberCount', 'views', 'likes', 'category', 'isShort',
             'uploaderUid', 'createdAt', 'visibility', 'channelAvatarColor',
-            'commentCount']) &&
+            'commentCount', 'keywords']) &&
+          (!('keywords' in d) || isKeywords(d.keywords)) &&
           d.uploaderUid == request.auth.uid &&
           d.channelId == 'user-' + request.auth.uid &&
           d.channelName == get(userDoc(request.auth.uid)).data.displayName &&
@@ -631,7 +649,8 @@ service cloud.firestore {
         return isMyAccount(resource.data.uploaderUid) &&
           onlyChanges(['title', 'description', 'thumbnailUrl', 'category',
             'visibility', 'channelName', 'channelAvatarUrl',
-            'channelAvatarColor']) &&
+            'channelAvatarColor', 'keywords']) &&
+          (!changes('keywords') || isKeywords(d.keywords)) &&
           isText(d.title, 1, 100) &&
           isText(d.description, 0, 5000) &&
           (!changes('thumbnailUrl') || isCloudinaryUrl(d.thumbnailUrl)) &&
@@ -702,6 +721,8 @@ service cloud.firestore {
               likedBefore(videoId) && !likedAfter(videoId)))) ||
         // Comments / replies added or deleted (accounts only).
         isCommentCountChange() ||
+        // Search keywords for a video from before Phase 18.
+        isKeywordsFillIn() ||
         // Videos from before Phase 14 have no comment counter: the first
         // person to open one counts the comments and fills it in, once.
         (signedIn() && onlyChanges(['commentCount']) &&

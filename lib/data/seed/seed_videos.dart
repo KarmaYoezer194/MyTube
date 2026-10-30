@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../../core/constants/cloudinary_config.dart';
 import '../../core/constants/sample_media.dart';
 import '../../core/theme/avatar_colors.dart';
+import '../../core/utils/search_keywords.dart';
 
 /// One seed video. Views, likes and subscriber numbers are made up for the
 /// demo. The clips themselves are real and free to use (credits are in each
@@ -58,6 +59,11 @@ class _SeedVideo {
       'views': views,
       'likes': likes,
       'commentCount': 0,
+      'keywords': videoKeywords(
+        title: title,
+        channelName: channelName,
+        category: category,
+      ),
       'category': category,
       'isShort': isShort,
       'uploaderUid': 'seed',
@@ -115,6 +121,7 @@ class _SeedChannel {
       'avatarUrl': '',
       'avatarColor': avatarColorFor(name).toARGB32(),
       'subscriberCount': subscriberCount,
+      'keywords': channelKeywords(name: name, handle: handle),
       'ownerUid': 'seed',
       'createdAt': Timestamp.fromDate(now.subtract(Duration(days: daysAgo))),
     };

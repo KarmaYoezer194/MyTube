@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../core/constants/sample_media.dart';
 import '../../core/utils/cloudinary_urls.dart';
+import '../../core/utils/search_keywords.dart';
 
 /// One video (long video or Short), stored in Firestore at `videos/{id}`.
 @immutable
@@ -28,6 +29,7 @@ class Video {
     this.channelAvatarColor,
     this.commentCount,
     this.pinnedCommentId = '',
+    this.hasKeywords = true,
   });
 
   final String id;
@@ -75,6 +77,15 @@ class Video {
   /// The comment the uploader pinned to the top, or '' for none.
   final String pinnedCommentId;
 
+  /// false for videos from before Phase 18 (no search `keywords` yet; the
+  /// app fills them in once, see VideoRepository).
+  final bool hasKeywords;
+
+  /// The search keywords for this video's current title / channel /
+  /// category (see core/utils/search_keywords.dart).
+  List<String> get keywords =>
+      videoKeywords(title: title, channelName: channelName, category: category);
+
   Duration get duration => Duration(seconds: durationSeconds);
 
   bool get isUnlisted => visibility == 'unlisted';
@@ -113,6 +124,7 @@ class Video {
       channelAvatarColor: (data['channelAvatarColor'] as num?)?.toInt(),
       commentCount: (data['commentCount'] as num?)?.toInt(),
       pinnedCommentId: data['pinnedCommentId'] as String? ?? '',
+      hasKeywords: data['keywords'] is List,
     );
   }
 
@@ -139,6 +151,7 @@ class Video {
       'channelAvatarColor': ?channelAvatarColor,
       // A new video starts with no comments.
       'commentCount': commentCount ?? 0,
+      'keywords': keywords,
     };
   }
 
@@ -170,6 +183,7 @@ class Video {
       channelAvatarColor: channelAvatarColor,
       commentCount: commentCount,
       pinnedCommentId: pinnedCommentId,
+      hasKeywords: hasKeywords,
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/widgets/category_chip.dart';
@@ -33,7 +34,7 @@ class HomeChipsBar extends ConsumerWidget implements PreferredSizeWidget {
               icon: Symbols.explore,
               label: 'Explore',
               selected: false,
-              onTap: () => _showExploreSheet(context, controller),
+              onTap: () => context.push('/home/explore'),
             );
           }
           final category = homeCategories[index - 1];
@@ -46,47 +47,4 @@ class HomeChipsBar extends ConsumerWidget implements PreferredSizeWidget {
       ),
     );
   }
-}
-
-const _categoryIcons = {
-  'Animation': Symbols.animation,
-  'Cars': Symbols.directions_car,
-  'Entertainment': Symbols.theater_comedy,
-  'Sci-Fi': Symbols.rocket_launch,
-  recentlyUploadedCategory: Symbols.schedule,
-};
-
-/// The Explore chip opens a list of categories, like YouTube's Explore menu.
-void _showExploreSheet(
-  BuildContext context,
-  SelectedCategoryController controller,
-) {
-  showModalBottomSheet<void>(
-    context: context,
-    builder: (sheetContext) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text(
-              'Explore',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-            ),
-          ),
-          for (final entry in _categoryIcons.entries)
-            ListTile(
-              leading: Icon(entry.value),
-              title: Text(entry.key),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                controller.select(entry.key);
-              },
-            ),
-          const SizedBox(height: 8),
-        ],
-      ),
-    ),
-  );
 }

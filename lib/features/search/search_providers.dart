@@ -55,23 +55,3 @@ List<String> searchSuggestions(List<Video> videos, String typed) {
   }
   return out.take(8).toList();
 }
-
-/// Videos matching ALL the words you typed (in the title, channel,
-/// category or description). Videos whose title contains the whole query
-/// come first.
-List<Video> searchVideos(List<Video> videos, String query) {
-  final q = query.trim().toLowerCase();
-  final words = q.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
-  if (words.isEmpty) return const [];
-
-  final matches = videos.where((v) {
-    if (v.isUnlisted) return false;
-    final haystack =
-        '${v.title} ${v.channelName} ${v.category} ${v.description}'
-            .toLowerCase();
-    return words.every(haystack.contains);
-  }).toList();
-
-  bool inTitle(Video v) => v.title.toLowerCase().contains(q);
-  return [...matches.where(inTitle), ...matches.where((v) => !inTitle(v))];
-}

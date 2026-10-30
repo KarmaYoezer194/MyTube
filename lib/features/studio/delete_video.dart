@@ -6,6 +6,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../data/models/video.dart';
 import '../../data/repositories/video_repository.dart';
 import '../mini_player/player_panel_provider.dart';
+import '../discovery/discovery_providers.dart';
 import 'studio_stats.dart';
 
 /// Asks, then deletes [video] from MyTube. Returns true if it was deleted.
@@ -87,6 +88,7 @@ Future<bool> confirmAndDeleteVideo(
         .read(videoRepositoryProvider)
         .deleteVideo(video.id)
         .timeout(const Duration(seconds: 15));
+    ref.invalidate(homeFeedProvider);
     messenger.showSnackBar(
       SnackBar(
         content: Text(video.isShort ? 'Short deleted' : 'Video deleted'),

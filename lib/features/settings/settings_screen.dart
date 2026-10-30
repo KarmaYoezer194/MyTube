@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/user_repository.dart';
 import '../auth/sign_in_screen.dart';
+import '../discovery/hidden_content.dart';
 import 'settings_providers.dart';
 
 /// Settings: Appearance (device / dark / light), Autoplay, Clear watch
@@ -192,6 +193,34 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: const Text('Play the next video when one ends'),
             value: autoplay,
             onChanged: ref.read(autoplayProvider.notifier).setEnabled,
+          ),
+
+          sectionTitle('Recommendations'),
+          Consumer(
+            builder: (context, ref, _) {
+              final videos = ref.watch(notInterestedProvider).length;
+              final channels = ref.watch(hiddenChannelsProvider).length;
+              return ListTile(
+                leading: const Icon(Symbols.visibility),
+                title: const Text('Show hidden videos and channels again'),
+                subtitle: Text(
+                  '$videos "Not interested" · '
+                  "$channels \"Don't recommend channel\"",
+                ),
+                enabled: videos + channels > 0,
+                onTap: () {
+                  ref.read(notInterestedProvider.notifier).clear();
+                  ref.read(hiddenChannelsProvider.notifier).clear();
+                  ScaffoldMessenger.of(context)
+                    ..hideCurrentSnackBar()
+                    ..showSnackBar(
+                      const SnackBar(
+                        content: Text('Hidden videos and channels are back'),
+                      ),
+                    );
+                },
+              );
+            },
           ),
 
           sectionTitle('History & privacy'),
