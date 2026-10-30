@@ -131,10 +131,18 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen>
         ref.watch(isSignedInProvider) &&
         widget.channelId == Channel.idForUser(ref.watch(currentUidProvider));
 
+    // "Settled" = Firestore answered: with data, or with an error (e.g.
+    // permission denied before the new rules are deployed). Riverpod keeps
+    // retrying failed reads, so an error must not count as "still loading".
+    final channelSettled = channelAsync.hasValue || channelAsync.hasError;
+    if (channelAsync.hasError) {
+      debugPrint('CHANNEL ${widget.channelId}: ${channelAsync.error}');
+    }
+
     // Older uploads have no channel document: build one from a video.
     Channel? channel = channelAsync.value;
-    if (channel == null && channelAsync.hasValue) {
-      if (isMine) {
+    if (channel == null && channelSettled) {
+      if (isMine && channelAsync.hasValue) {
         ref.watch(myProfileProvider);
         WidgetsBinding.instance.addPostFrameCallback(
           (_) => _createMyChannelOnce(),
@@ -149,21 +157,21 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen>
       }
     }
     // No channel and no videos, but an account (e.g. someone who only
-    // comments): show their public profile as the channel.
-    var profileLoading = false;
+    // comments, or you): show their public profile as the channel.
+    var profileSettled = true;
     if (channel == null &&
-        channelAsync.hasValue &&
+        channelSettled &&
         widget.channelId.startsWith('user-')) {
       final uid = widget.channelId.substring('user-'.length);
       final profile = ref.watch(userProfileProvider(uid));
-      profileLoading = profile.isLoading;
+      profileSettled = profile.hasValue || profile.hasError;
       final user = profile.value;
       if (user != null) channel = Channel.fromProfile(user);
     }
 
-    final loading =
-        (channelAsync.isLoading || profileLoading) && channel == null;
-    final missing = !loading && channel == null;
+    final loading = channel == null && (!channelSettled || !profileSettled);
+    final failed = channel == null && !loading && channelAsync.hasError;
+    final missing = channel == null && !loading && !failed;
 
     return Scaffold(
       appBar: AppBar(
@@ -180,7 +188,17 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen>
           ),
         ],
       ),
-      body: missing
+      body: failed
+          ? EmptyState(
+              icon: Symbols.error,
+              title: "Couldn't load this channel",
+              message:
+                  'Check your connection. If it keeps happening, the '
+                  'database rules may need to be deployed.',
+              actionLabel: 'Retry',
+              onAction: () => ref.invalidate(channelProvider(widget.channelId)),
+            )
+          : missing
           ? EmptyState(
               icon: Symbols.person_off,
               title: "This channel doesn't exist",
