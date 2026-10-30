@@ -19,6 +19,9 @@ import 'firebase_options.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // A published (release) build stays quiet: the browser console is visible
+  // to anyone, so it shouldn't show ids, links or error details.
+  if (kReleaseMode) debugPrint = (String? message, {int? wrapWidth}) {};
   final clock = Stopwatch()..start();
   void log(String step) =>
       debugPrint('STARTUP (${clock.elapsedMilliseconds} ms): $step');

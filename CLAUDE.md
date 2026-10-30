@@ -47,8 +47,11 @@ flutter pub get
 dart format lib test tool
 flutter analyze
 flutter test
-flutter build web
+flutter build web --no-wasm-dry-run
 ```
+
+(`--no-wasm-dry-run` only turns off Flutter's optional "try WebAssembly"
+notice, so a clean build shows no warnings at all.)
 
 A phase is only "done" when `flutter analyze` reports no issues and every
 command exits successfully.

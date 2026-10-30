@@ -3,7 +3,7 @@ rules_version = '2';
 // MyTube security rules (Phase 12: final rules; Phase 13: channels;
 // Phase 14: replies, comment counters, edit, pin and creator heart;
 // Phase 15: playlists; Phase 17: notifications; Phase 18: search
-// keywords; Phase 19: reports).
+// keywords; Phase 19: reports; Phase 20: security review fixes).
 //
 // There is no server (free Spark plan, no Cloud Functions), so the app does
 // the "server" work itself and THESE RULES are what keeps it honest:
@@ -356,8 +356,9 @@ service cloud.firestore {
             (!('fromAvatarColor' in d) || isColor(d.fromAvatarColor)) &&
             d.videoId is string && d.commentId is string &&
             d.replyId is string &&
-            isText(d.videoTitle, 0, 100) &&
-            d.thumbnailUrl is string && d.thumbnailUrl.size() <= 500 &&
+            // (Security review: the sender can't make up what I see.)
+            d.videoTitle == get(videoDoc(d.videoId)).data.title &&
+            (d.thumbnailUrl == '' || isCloudinaryUrl(d.thumbnailUrl)) &&
             d.isShort is bool &&
             isText(d.text, 0, 200) &&
             d.read == false &&
@@ -379,6 +380,8 @@ service cloud.firestore {
               request.resource.data.replyId == '' &&
               get(videoDoc(request.resource.data.videoId)).data.uploaderUid ==
                 request.auth.uid &&
+              get(videoDoc(request.resource.data.videoId)).data.visibility ==
+                'public' &&
               exists(/databases/$(database)/documents/users/$(uid)/subscribed/$('user-' + request.auth.uid))) ||
             // The sender's comment on my video.
             (request.resource.data.type == 'comment' &&
@@ -620,6 +623,9 @@ service cloud.firestore {
 
       // The 13 sample videos. The app writes them on its very first launch
       // (which may be by a guest), with these exact ids.
+      // (Security review: only the known fields, links to OUR Cloudinary
+      // account and whole numbers - nobody can plant a link to another
+      // site in a sample video.)
       function isSeedCreate() {
         let d = request.resource.data;
         return signedIn() &&
@@ -628,10 +634,24 @@ service cloud.firestore {
             'snow_forest_drive', 'sherp_icebergs', 'bund_fireworks',
             'fire_juggling', 'vettisfossen_waterfall', 'tgv_passing',
             'magpies_calling'] &&
+          d.keys().hasOnly(['sampleKey', 'title', 'description', 'videoUrl',
+            'thumbnailUrl', 'durationSeconds', 'channelId', 'channelName',
+            'channelAvatarUrl', 'subscriberCount', 'views', 'likes',
+            'commentCount', 'keywords', 'category', 'isShort', 'uploaderUid',
+            'visibility', 'createdAt']) &&
           d.uploaderUid == 'seed' &&
           d.sampleKey == videoId &&
           isText(d.title, 1, 100) &&
+          isText(d.description, 0, 5000) &&
+          isCloudinaryUrl(d.videoUrl) &&
+          isCloudinaryUrl(d.thumbnailUrl) &&
+          d.channelAvatarUrl == '' &&
+          isLength(d.durationSeconds) &&
+          d.subscriberCount is int && d.views is int && d.likes is int &&
+          (!('commentCount' in d) || d.commentCount == 0) &&
+          (!('keywords' in d) || isKeywords(d.keywords)) &&
           isCategory(d.category) &&
+          d.isShort is bool &&
           d.visibility == 'public';
       }
 

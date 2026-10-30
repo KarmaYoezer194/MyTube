@@ -57,3 +57,5 @@ app.*.map.json
 
 # App Check debug token (local runs only) — never commit
 app_check.local.json
+# Release build settings (reCAPTCHA site key) — see docs/PUBLISHING.md
+app_check.release.json

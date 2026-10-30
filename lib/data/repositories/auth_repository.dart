@@ -199,7 +199,8 @@ class AuthRepository {
     } catch (error) {
       debugPrint('AUTH: could not set up your channel yet: $error');
     }
-    debugPrint('AUTH: signed in as ${fresh.email} (${fresh.uid})');
+    // (No email in the log: the browser console is visible to anyone.)
+    debugPrint('AUTH: signed in (${fresh.uid})');
   }
 }
 

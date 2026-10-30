@@ -66,7 +66,7 @@ Claude builds ONE phase when asked, then stops (see CLAUDE.md).
   - Remember volume, mute and speed.
 
 
-- [ ] **Phase 20 — Release-ready (local only)**
+- [x] **Phase 20 — Release-ready (local only)**
   - `flutter build web` with no warnings.
   - Security review.
   - A "how to publish later" note. NO deploy, no Hosting, no PWA setup.
@@ -99,6 +99,8 @@ Format: `- [ ] (Phase X) What to do — where — why`
 - [ ] (Phase 18) Deploy the rules and the 9 new indexes: `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — Home, Explore and search load from Firestore now, so until the indexes are **built** (Firebase console → Firestore Database → Indexes → all "Enabled"; a few minutes) they show "Couldn't load videos" / "Couldn't search", and the old videos can't get their search keywords. (One command covers every earlier open deploy too.)
 - [ ] (Phase 19) Deploy the rules (new `reports` collection): `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — until then ⋮ → Report says "Couldn't send the report". (Same command as the open deploys above.)
 - [ ] (Phase 19, from time to time) Read reports — Firebase console → Firestore Database → `reports` — nobody reviews them inside the app.
+- [ ] (Phase 20) Deploy the tightened rules: `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — the security-review fixes only protect the database once deployed. If the deploy prints an error (the rules can't be test-compiled on this PC), nothing changes on the server — paste the error to Claude.
+- [ ] (Phase 20, only when you decide to publish) Follow docs/PUBLISHING.md and the "Checklist before publishing" in docs/SECURITY_REVIEW.md. Nothing is deployed until then.
 
 ## Progress log
 
@@ -353,3 +355,24 @@ Newest entry at the bottom.
   player; shortcuts work on the full watch page only (not the mini player
   or Shorts); remembered settings are per browser; reports are only
   readable in the console.
+- 2026-10-30 — **Phase 20 (Release-ready, local only) done.** Release
+  build: `flutter build web --no-wasm-dry-run` now finishes with **no
+  warnings** (added the official `cupertino_icons` font that go_router's
+  Cupertino widgets need — it was a missing-font notice; the WASM notice is
+  only Flutter suggesting WebAssembly, turned off with the flag, also in
+  CLAUDE.md's verify commands). Security review (docs/SECURITY_REVIEW.md):
+  no secrets in the code or git history; every rule re-read. Fixed: sample
+  videos can only be created with known fields + our Cloudinary links +
+  whole numbers; notifications must carry the real video title, a
+  Cloudinary thumbnail, and upload notifications only for public videos;
+  the console no longer shows the signed-in email and a release build
+  prints nothing (`debugPrint` off in release). Known limits listed
+  (views +1, length can grow, one-time fill-ins, unsigned preset, no rate
+  limits). "How to publish later" (docs/PUBLISHING.md): Firebase Hosting on
+  Spark, release build WITHOUT the debug token (`app_check.release.json`,
+  git-ignored), hosting headers, authorized domains, reCAPTCHA domain, App
+  Check enforce, API-key restriction, quotas — NO deploy, no Hosting, no
+  PWA. README updated to the current feature list and setup.
+  Files: firestore.rules, lib/main.dart, auth_repository.dart, pubspec
+  (cupertino_icons), .gitignore, README.md, CLAUDE.md, new
+  docs/SECURITY_REVIEW.md + docs/PUBLISHING.md, rules test (143 tests).

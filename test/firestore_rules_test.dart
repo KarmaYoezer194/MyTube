@@ -98,6 +98,24 @@ void main() {
     expect(code, contains('value.size() <= 200'));
   });
 
+  test('security review: sample videos and notifications are checked', () {
+    // Sample videos may only point to our Cloudinary account.
+    final start = code.indexOf('function isSeedCreate()');
+    final seed = code.substring(start, code.indexOf('function', start + 10));
+    expect(seed, contains('isCloudinaryUrl(d.videoUrl)'));
+    expect(seed, contains('isCloudinaryUrl(d.thumbnailUrl)'));
+    expect(seed, contains('d.keys().hasOnly('));
+    // Notifications show the real title, and uploads must be public.
+    expect(
+      code,
+      contains('d.videoTitle == get(videoDoc(d.videoId)).data.title'),
+    );
+    expect(
+      code.replaceAll(RegExp(r'\s+'), ' '),
+      contains("data.visibility == 'public' && exists("),
+    );
+  });
+
   test('guests can still keep history and add views', () {
     expect(code, contains('match /history/{videoId}'));
     expect(code, contains("onlyChanges(['views'])"));
