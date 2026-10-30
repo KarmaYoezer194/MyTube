@@ -57,7 +57,7 @@ Claude builds ONE phase when asked, then stops (see CLAUDE.md).
   - Hide: Not interested / Don't recommend channel.
   - Infinite scroll everywhere.
 
-- [ ] **Phase 19 — Watch extras**
+- [x] **Phase 19 — Watch extras**
   - Deep links `/watch?v=ID`, `/shorts/ID`, `/@handle` that survive a refresh.
   - Share copies the link.
   - Keyboard shortcuts.
@@ -97,6 +97,8 @@ Format: `- [ ] (Phase X) What to do — where — why`
 - [ ] (Phase 16, whenever you delete a video in Studio) Delete its file in Cloudinary too — console.cloudinary.com → Media Library → search the name shown in the delete dialog (it has a Copy button) → select → Delete — the app can't do it (that needs the API secret, which must never be in the app), and leftover files use your free storage. No rules deploy is needed for Phase 16.
 - [ ] (Phase 17) Deploy the rules and the new subscribers index: `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — until then no notifications are sent (the writes are refused) and uploads can't find their subscribers. The "subscribed.channelId" index takes a few minutes to build. (Covers the Phase 14/15 deploys too if they're still open.)
 - [ ] (Phase 18) Deploy the rules and the 9 new indexes: `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — Home, Explore and search load from Firestore now, so until the indexes are **built** (Firebase console → Firestore Database → Indexes → all "Enabled"; a few minutes) they show "Couldn't load videos" / "Couldn't search", and the old videos can't get their search keywords. (One command covers every earlier open deploy too.)
+- [ ] (Phase 19) Deploy the rules (new `reports` collection): `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — until then ⋮ → Report says "Couldn't send the report". (Same command as the open deploys above.)
+- [ ] (Phase 19, from time to time) Read reports — Firebase console → Firestore Database → `reports` — nobody reviews them inside the app.
 
 ## Progress log
 
@@ -316,3 +318,38 @@ Newest entry at the bottom.
   (not "views this week" — that needs a server); hidden items are per
   browser; the watch page / player still use the full video list (Phase 21
   performance).
+- 2026-10-30 — **Phase 19 (Watch extras) done.** Deep links (Flutter's
+  default `#/` addresses, so they survive a refresh on any host):
+  `#/watch?v=ID` opens Home with the player on that video, and while the
+  full player is open the address bar shows that link (back to the page
+  underneath when it shrinks / closes); `#/shorts/ID` opens that Short and
+  the address follows as you swipe; `#/@handle` finds the channel (sample
+  handles locally, accounts via `handles/`) and opens its page ("Channel
+  not found" otherwise; any other unknown address goes Home). Share now
+  copies the link (watch / shorts link; channel pages have a Share button
+  for `#/@handle`); the unused share_plus package was removed. Keyboard
+  shortcuts on the full watch page (not while typing): Space/K, J/L ±10 s,
+  ←/→ ±5 s, ↑/↓ volume, M mute, F full screen, Esc, I mini player,
+  Shift+N/P next/previous (follows a playing playlist), >/< speed, 0-9 jump,
+  Home/End, ? help list. Volume (new slider in the player's ⚙ sheet + ↑/↓),
+  mute and speed are saved in this browser and used by the watch page,
+  mini player and Shorts. One ⋮ menu everywhere (also next to the title on
+  the watch page): Save to Watch later, Save to playlist, Share, Not
+  interested, Don't recommend channel, Report. Report: reason list +
+  optional details → `reports/{videoId}_{uid}` (once per account per video;
+  rules check it; guests get the sign-in sheet).
+  Files: new lib/core/utils/app_links.dart,
+  lib/features/watch/keyboard_shortcuts.dart,
+  lib/features/channel/handle_screen.dart,
+  lib/data/repositories/report_repository.dart,
+  lib/features/report/report_dialog.dart; changed app_router (/watch,
+  /shorts/:id, /:handle), app_shell (address bar follows the player),
+  player_panel (shortcuts), playback_controller (saved mute / volume /
+  speed), playback_speed_sheet (volume slider), short_page, shorts_screen,
+  share_video, channel_screen, watch_details, video_options_sheet,
+  sign_in_prompt (report), firestore.rules, pubspec.yaml. Tests:
+  test/watch_extras_test.dart (142 tests).
+  Known limits: `#/watch?v=` with a Short's id plays it in the normal
+  player; shortcuts work on the full watch page only (not the mini player
+  or Shorts); remembered settings are per browser; reports are only
+  readable in the console.

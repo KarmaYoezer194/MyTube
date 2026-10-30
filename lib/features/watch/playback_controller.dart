@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../core/providers/shared_preferences_provider.dart';
 import '../../core/utils/browser_audio.dart';
 import '../../data/repositories/user_repository.dart';
 import '../../data/repositories/video_repository.dart';
@@ -26,24 +27,68 @@ class VideoUnavailableException implements Exception {
 /// (on a video or the Shorts tab), so that's normally already true.
 /// Only if you haven't clicked anything yet do we start muted (Chrome would
 /// refuse to play otherwise) and show "Tap to unmute".
-/// Whatever you choose with the 🔇/🔊 button stays for the next videos.
+/// Whatever you choose with the 🔇/🔊 button stays for the next videos,
+/// and is saved in this browser (it survives a reload).
 class PlayerMutedController extends Notifier<bool> {
-  @override
-  bool build() => !canPlaySoundNow();
+  static const _key = 'player_muted';
 
-  void setMuted(bool muted) => state = muted;
+  @override
+  bool build() =>
+      (ref.watch(sharedPreferencesProvider).getBool(_key) ?? false) ||
+      !canPlaySoundNow();
+
+  void setMuted(bool muted) {
+    state = muted;
+    ref.read(sharedPreferencesProvider).setBool(_key, muted);
+  }
 }
+
+/// Volume (0..1) when not muted. Saved in this browser.
+class PlayerVolumeController extends Notifier<double> {
+  static const _key = 'player_volume';
+
+  @override
+  double build() =>
+      (ref.watch(sharedPreferencesProvider).getDouble(_key) ?? 1.0).clamp(
+        0.0,
+        1.0,
+      );
+
+  void setVolume(double volume) {
+    state = volume.clamp(0.0, 1.0);
+    ref.read(sharedPreferencesProvider).setDouble(_key, state);
+  }
+}
+
+final playerVolumeProvider = NotifierProvider<PlayerVolumeController, double>(
+  PlayerVolumeController.new,
+);
+
+/// The volume to give the player: 0 when muted, else the chosen volume.
+final effectiveVolumeProvider = Provider<double>(
+  (ref) => ref.watch(playerMutedProvider) ? 0 : ref.watch(playerVolumeProvider),
+);
 
 final playerMutedProvider = NotifierProvider<PlayerMutedController, bool>(
   PlayerMutedController.new,
 );
 
-/// Playback speed (0.25x - 2x), kept for the next videos too.
+/// Playback speed (0.25x - 2x), kept for the next videos too and saved in
+/// this browser.
 class PlaybackSpeedController extends Notifier<double> {
-  @override
-  double build() => 1.0;
+  static const _key = 'player_speed';
 
-  void setSpeed(double speed) => state = speed;
+  @override
+  double build() =>
+      (ref.watch(sharedPreferencesProvider).getDouble(_key) ?? 1.0).clamp(
+        0.25,
+        2.0,
+      );
+
+  void setSpeed(double speed) {
+    state = speed.clamp(0.25, 2.0);
+    ref.read(sharedPreferencesProvider).setDouble(_key, state);
+  }
 }
 
 final playbackSpeedProvider = NotifierProvider<PlaybackSpeedController, double>(
@@ -98,10 +143,10 @@ class PlaybackController extends AsyncNotifier<VideoPlayerController?> {
     // You may have tapped another video while this one was loading.
     if (!ref.mounted) return null;
 
-    await controller.setVolume(ref.read(playerMutedProvider) ? 0 : 1);
+    await controller.setVolume(ref.read(effectiveVolumeProvider));
     await controller.setPlaybackSpeed(ref.read(playbackSpeedProvider));
-    ref.listen(playerMutedProvider, (_, muted) {
-      controller.setVolume(muted ? 0 : 1);
+    ref.listen(effectiveVolumeProvider, (_, volume) {
+      controller.setVolume(volume);
     });
     ref.listen(playbackSpeedProvider, (_, speed) {
       controller.setPlaybackSpeed(speed);

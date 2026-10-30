@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/channel/channel_screen.dart';
+import '../../features/channel/handle_screen.dart';
+import '../../features/mini_player/player_panel_provider.dart';
 import '../../features/discovery/explore_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../data/models/playlist.dart';
@@ -117,6 +119,36 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
         ],
+      ),
+      // ---- Deep links (they also work after a page refresh) ----
+      // /watch?v=ID: Home with the player open on that video.
+      GoRoute(
+        path: '/watch',
+        redirect: (context, state) {
+          final id = state.uri.queryParameters['v'] ?? '';
+          if (id.isNotEmpty) {
+            Future.microtask(
+              () => ref.read(playerPanelProvider.notifier).open(id),
+            );
+          }
+          return '/home';
+        },
+      ),
+      // /shorts/ID: that Short in the Shorts tab.
+      GoRoute(
+        path: '/shorts/:videoId',
+        redirect: (context, state) =>
+            '/shorts?v=${Uri.encodeQueryComponent(state.pathParameters['videoId'] ?? '')}',
+      ),
+      // /@handle: that channel. Anything else unknown goes to Home.
+      GoRoute(
+        path: '/:handle',
+        redirect: (context, state) =>
+            (state.pathParameters['handle'] ?? '').startsWith('@')
+            ? null
+            : '/home',
+        builder: (context, state) =>
+            HandleScreen(handle: state.pathParameters['handle'] ?? ''),
       ),
     ],
   );

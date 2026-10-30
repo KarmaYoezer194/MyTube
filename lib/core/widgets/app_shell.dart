@@ -8,6 +8,7 @@ import '../../features/mini_player/player_panel_provider.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/user_repository.dart';
 import '../../features/upload/create_sheet.dart';
+import '../utils/app_links.dart';
 import '../utils/online_status.dart';
 import 'app_bottom_nav_bar.dart';
 import 'channel_avatar.dart';
@@ -68,6 +69,20 @@ class AppShell extends ConsumerWidget {
     // Keeps my subscriptions loaded while the app runs: this also fills in
     // the channelId on older ones, so channels can notify me of uploads.
     ref.listen(subscribedIdsProvider, (_, _) {});
+    // While the full player is open, the address bar shows /watch?v=ID
+    // (a refresh or a copied address opens that video). Back to the page
+    // underneath when it shrinks or closes.
+    ref.listen(playerPanelProvider, (previous, next) {
+      if (next.isExpanded && next.videoId != null) {
+        showInAddressBar(watchPath(next.videoId!));
+      } else if (previous?.isExpanded ?? false) {
+        showInAddressBar(
+          GoRouter.of(
+            context,
+          ).routerDelegate.currentConfiguration.uri.toString(),
+        );
+      }
+    });
     final panel = ref.watch(playerPanelProvider);
     final navHeight = AppBottomNavBar.totalHeight(context);
     final onShorts = navigationShell.currentIndex == _shortsBranch;

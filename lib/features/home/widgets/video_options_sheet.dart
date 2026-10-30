@@ -7,6 +7,7 @@ import '../../../data/models/video.dart';
 import '../../../data/repositories/user_repository.dart';
 import '../../auth/require_account.dart';
 import '../../playlists/save_to_playlist_sheet.dart';
+import '../../report/report_dialog.dart';
 import '../home_providers.dart';
 
 /// An extra row at the top of a video's ⋮ menu, e.g. "Remove from watch
@@ -24,7 +25,7 @@ class VideoMenuAction {
 }
 
 /// The ⋮ menu of a video: [extraActions], Save to Watch later, Save to
-/// playlist, Share, Not interested, Don't recommend channel.
+/// playlist, Share, Not interested, Don't recommend channel, Report.
 ///
 /// Hidden videos and channels stay out of Home, Explore, search and Up
 /// next (saved in this browser; Settings can bring them back).
@@ -149,6 +150,14 @@ Future<void> showVideoOptionsSheet(
                 );
               },
             ),
+          ListTile(
+            leading: const Icon(Symbols.flag),
+            title: const Text('Report'),
+            onTap: () {
+              Navigator.pop(sheetContext);
+              if (context.mounted) reportVideo(context, ref, video);
+            },
+          ),
           const SizedBox(height: 8),
         ],
       ),

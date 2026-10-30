@@ -3,7 +3,7 @@ rules_version = '2';
 // MyTube security rules (Phase 12: final rules; Phase 13: channels;
 // Phase 14: replies, comment counters, edit, pin and creator heart;
 // Phase 15: playlists; Phase 17: notifications; Phase 18: search
-// keywords).
+// keywords; Phase 19: reports).
 //
 // There is no server (free Spark plan, no Cloud Functions), so the app does
 // the "server" work itself and THESE RULES are what keeps it honest:
@@ -571,6 +571,32 @@ service cloud.firestore {
         isPlaylist(request.resource.data);
 
       allow delete: if isMyAccount(resource.data.ownerUid);
+    }
+
+    // ================= Reports =================
+    // reports/{videoId}_{uid}: reporterUid, videoId, reason, details,
+    // createdAt. An account can report a video ONCE (the id is fixed, and
+    // a second create of the same id is refused). Reports are read in the
+    // Firebase console; in the app you can only see whether YOU reported
+    // a video (the id ends with your uid, so this works even before the
+    // report exists).
+    match /reports/{reportId} {
+      allow read: if hasAccount() && reportId.matches('.+_' + request.auth.uid);
+      allow create: if hasAccount() &&
+        request.resource.data.keys().hasOnly(['reporterUid', 'videoId',
+          'reason', 'details', 'createdAt']) &&
+        request.resource.data.keys().hasAll(['reporterUid', 'videoId',
+          'reason', 'details', 'createdAt']) &&
+        request.resource.data.reporterUid == request.auth.uid &&
+        request.resource.data.videoId is string &&
+        reportId == request.resource.data.videoId + '_' + request.auth.uid &&
+        exists(videoDoc(request.resource.data.videoId)) &&
+        request.resource.data.reason in ['sexual', 'violent', 'hateful',
+          'harassment', 'harmful', 'misinformation', 'spam', 'rights',
+          'other'] &&
+        isText(request.resource.data.details, 0, 500) &&
+        request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
     }
 
     // ================= Videos =================

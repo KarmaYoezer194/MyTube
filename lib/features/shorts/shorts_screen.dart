@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../core/utils/app_links.dart';
+
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../data/repositories/video_repository.dart';
@@ -51,6 +53,20 @@ class _ShortsScreenState extends ConsumerState<ShortsScreen> {
   void dispose() {
     _pages.dispose();
     super.dispose();
+  }
+
+  /// The Short whose link is in the address bar.
+  String? _inAddressBar;
+
+  /// Keeps `/shorts/ID` of the Short on screen in the address bar, so a
+  /// refresh (or a copied address) comes back to it.
+  void _showInAddressBar(String? id) {
+    if (id == _inAddressBar) return;
+    _inAddressBar = id;
+    if (id == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _inAddressBar == id) showInAddressBar(shortPath(id));
+    });
   }
 
   /// Opened from the shelf: jump straight to the Short you tapped.
@@ -111,6 +127,9 @@ class _ShortsScreenState extends ConsumerState<ShortsScreen> {
                   );
                 }
                 _jumpIfNeeded([for (final v in list) v.id]);
+                _showInAddressBar(
+                  visible ? list[_current.clamp(0, list.length - 1)].id : null,
+                );
                 return PageView.builder(
                   controller: _pages,
                   scrollDirection: Axis.vertical,

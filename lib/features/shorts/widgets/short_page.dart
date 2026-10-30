@@ -69,7 +69,7 @@ class _ShortPageState extends ConsumerState<ShortPage> {
     }
     if (!mounted) return;
     await _controller.setLooping(true);
-    await _controller.setVolume(ref.read(playerMutedProvider) ? 0 : 1);
+    await _controller.setVolume(ref.read(effectiveVolumeProvider));
 
     // Save the length if it's longer than the one in Firestore - see the
     // note in playback_controller.dart about Cloudinary's first conversion
@@ -138,8 +138,8 @@ class _ShortPageState extends ConsumerState<ShortPage> {
   @override
   Widget build(BuildContext context) {
     // Follow the app-wide mute switch (shared with the watch page).
-    ref.listen(playerMutedProvider, (_, muted) {
-      if (_ready) _controller.setVolume(muted ? 0 : 1);
+    ref.listen(effectiveVolumeProvider, (_, volume) {
+      if (_ready) _controller.setVolume(volume);
     });
 
     final video = widget.video;

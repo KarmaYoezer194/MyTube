@@ -28,8 +28,54 @@ Future<void> showPlaybackSpeedSheet(BuildContext context, WidgetRef ref) {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ---- Volume (remembered, like mute and speed) ----
             const Padding(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 0),
+              child: Text(
+                'Volume',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+            ),
+            Consumer(
+              builder: (context, ref, _) {
+                final volume = ref.watch(playerVolumeProvider);
+                final muted = ref.watch(playerMutedProvider);
+                return Row(
+                  children: [
+                    IconButton(
+                      tooltip: muted ? 'Unmute' : 'Mute',
+                      onPressed: () => ref
+                          .read(playerMutedProvider.notifier)
+                          .setMuted(!muted),
+                      icon: Icon(
+                        muted || volume == 0
+                            ? Symbols.volume_off
+                            : Symbols.volume_up,
+                      ),
+                    ),
+                    Expanded(
+                      child: Slider(
+                        value: muted ? 0 : volume,
+                        label: '${((muted ? 0 : volume) * 100).round()}%',
+                        divisions: 20,
+                        onChanged: (value) {
+                          ref
+                              .read(playerVolumeProvider.notifier)
+                              .setVolume(value);
+                          if (muted && value > 0) {
+                            ref
+                                .read(playerMutedProvider.notifier)
+                                .setMuted(false);
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Text(
                 'Playback speed',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),

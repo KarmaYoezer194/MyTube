@@ -41,6 +41,11 @@ enum SignInReason {
     Symbols.add_circle,
     'Want to share your own videos?',
     'Sign in to upload videos and Shorts.',
+  ),
+  report(
+    Symbols.flag,
+    'Want to report this video?',
+    'Sign in to report inappropriate content.',
   );
 
   const SignInReason(this.icon, this.title, this.message);

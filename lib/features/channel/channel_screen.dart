@@ -6,7 +6,9 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/text_styles.dart';
+import '../../core/utils/app_links.dart';
 import '../../core/utils/format_views.dart';
+import '../../core/utils/share_video.dart';
 import '../../core/widgets/channel_avatar.dart';
 import '../../core/widgets/compact_video_row.dart';
 import '../../core/widgets/empty_state.dart';
@@ -184,6 +186,15 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen>
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
+          if (channel?.handle ?? '' case final handle when handle.isNotEmpty)
+            IconButton(
+              tooltip: 'Share channel',
+              onPressed: () => copyLink(
+                ScaffoldMessenger.of(context),
+                appLink(channelPath(handle)),
+              ),
+              icon: const Icon(Symbols.share),
+            ),
           IconButton(
             tooltip: 'Search',
             onPressed: () => context.go('/home/search'),

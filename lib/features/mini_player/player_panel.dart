@@ -1,6 +1,7 @@
 import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:video_player/video_player.dart';
@@ -9,7 +10,9 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/text_styles.dart';
 import '../../data/models/video.dart';
 import '../../data/repositories/video_repository.dart';
+import '../watch/keyboard_shortcuts.dart';
 import '../watch/playback_controller.dart';
+import '../watch/widgets/playback_speed_sheet.dart';
 import '../watch/watch_body.dart';
 import '../playlists/play_queue.dart';
 import '../watch/widgets/player_progress_bar.dart';
@@ -61,13 +64,144 @@ class _PlayerPanelState extends ConsumerState<PlayerPanel>
   double _travel = 1;
 
   @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_onKey);
+  }
+
+  @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKey);
     _t.dispose();
     _slideIn.dispose();
     super.dispose();
   }
 
   PlayerPanelController get _panel => ref.read(playerPanelProvider.notifier);
+
+  // ---- Keyboard shortcuts (while the full watch page is open) ----
+
+  /// Handles a key, or returns false to let it go on (e.g. to a text box).
+  bool _onKey(KeyEvent event) {
+    if (event is KeyUpEvent) return false;
+    if (!mounted || !ref.read(playerPanelProvider).isExpanded) return false;
+    if (isTypingInTextField()) return false;
+    final command = shortcutFor(
+      event.logicalKey,
+      shift: HardwareKeyboard.instance.isShiftPressed,
+    );
+    if (command == null) return false;
+    // Holding a key repeats only seeking and volume.
+    if (event is KeyRepeatEvent &&
+        !const {
+          PlayerShortcut.back5,
+          PlayerShortcut.forward5,
+          PlayerShortcut.back10,
+          PlayerShortcut.forward10,
+          PlayerShortcut.volumeUp,
+          PlayerShortcut.volumeDown,
+        }.contains(command.action)) {
+      return true;
+    }
+    _run(command);
+    return true;
+  }
+
+  void _flash(String text) {
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(text),
+          duration: const Duration(milliseconds: 900),
+        ),
+      );
+  }
+
+  void _run(ShortcutCommand command) {
+    final controller = ref.read(playbackProvider).value;
+    final value = controller?.value;
+    final ready = controller != null && value!.isInitialized;
+
+    void seekTo(Duration target) {
+      if (!ready) return;
+      final end = value.duration;
+      controller.seekTo(
+        target < Duration.zero ? Duration.zero : (target > end ? end : target),
+      );
+    }
+
+    void seekBy(int seconds) {
+      if (ready) seekTo(value.position + Duration(seconds: seconds));
+    }
+
+    void setVolume(double volume) {
+      final v = volume.clamp(0.0, 1.0);
+      ref.read(playerVolumeProvider.notifier).setVolume(v);
+      ref.read(playerMutedProvider.notifier).setMuted(v == 0);
+      _flash('Volume ${(v * 100).round()}%');
+    }
+
+    switch (command.action) {
+      case PlayerShortcut.playPause:
+        if (!ready) return;
+        if (value.isPlaying) {
+          controller.pause();
+        } else {
+          if (value.position >= value.duration) {
+            controller.seekTo(Duration.zero);
+          }
+          controller.play();
+        }
+      case PlayerShortcut.back10:
+        seekBy(-10);
+      case PlayerShortcut.forward10:
+        seekBy(10);
+      case PlayerShortcut.back5:
+        seekBy(-5);
+      case PlayerShortcut.forward5:
+        seekBy(5);
+      case PlayerShortcut.seekPercent:
+        if (ready) seekTo(value.duration * (command.percent / 100));
+      case PlayerShortcut.toStart:
+        seekTo(Duration.zero);
+      case PlayerShortcut.toEnd:
+        if (ready) seekTo(value.duration);
+      case PlayerShortcut.volumeUp:
+        final muted = ref.read(playerMutedProvider);
+        setVolume((muted ? 0 : ref.read(playerVolumeProvider)) + 0.05);
+      case PlayerShortcut.volumeDown:
+        final muted = ref.read(playerMutedProvider);
+        setVolume((muted ? 0 : ref.read(playerVolumeProvider)) - 0.05);
+      case PlayerShortcut.mute:
+        final muted = !ref.read(playerMutedProvider);
+        ref.read(playerMutedProvider.notifier).setMuted(muted);
+        _flash(muted ? 'Muted' : 'Sound on');
+      case PlayerShortcut.faster || PlayerShortcut.slower:
+        final speed = stepSpeed(
+          playbackSpeeds,
+          ref.read(playbackSpeedProvider),
+          up: command.action == PlayerShortcut.faster,
+        );
+        ref.read(playbackSpeedProvider.notifier).setSpeed(speed);
+        _flash('Speed: ${speedLabel(speed)}');
+      case PlayerShortcut.fullscreen:
+        setState(() => _fullscreen = !_fullscreen);
+      case PlayerShortcut.exitOrMinimize:
+        _exitFullscreenOrMinimize();
+      case PlayerShortcut.miniPlayer:
+        setState(() => _fullscreen = false);
+        _panel.minimize();
+      case PlayerShortcut.next:
+        final id = ref.read(playerPanelProvider).videoId;
+        final next = id == null ? null : ref.read(nextVideoProvider(id));
+        if (next != null) _panel.switchTo(next.id);
+      case PlayerShortcut.previous:
+        _panel.openPrevious();
+      case PlayerShortcut.help:
+        showShortcutHelp(context);
+    }
+  }
 
   /// React to open / minimize / expand coming from anywhere in the app
   /// (tapping a video, the ⌄ button, the back button...).

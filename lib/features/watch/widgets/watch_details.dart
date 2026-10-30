@@ -17,6 +17,7 @@ import '../../../data/repositories/user_repository.dart';
 import '../../auth/require_account.dart';
 import '../../channel/channel_navigation.dart';
 import '../../comments/comments_preview_card.dart';
+import '../../home/widgets/video_options_sheet.dart';
 import '../../playlists/save_to_playlist_sheet.dart';
 import 'description_sheet.dart';
 
@@ -78,13 +79,29 @@ class WatchDetails extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  video.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.watchTitle.copyWith(
-                    color: colors.textPrimary,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        video.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.watchTitle.copyWith(
+                          color: colors.textPrimary,
+                        ),
+                      ),
+                    ),
+                    // Save to playlist, Not interested, Don't recommend
+                    // channel, Report, ...
+                    IconButton(
+                      tooltip: 'More actions',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () =>
+                          showVideoOptionsSheet(context, ref, video),
+                      icon: const Icon(Symbols.more_vert, size: 20),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 6),
                 Text.rich(
