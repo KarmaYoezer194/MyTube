@@ -71,7 +71,7 @@ Claude builds ONE phase when asked, then stops (see CLAUDE.md).
   - Security review.
   - A "how to publish later" note. NO deploy, no Hosting, no PWA setup.
 
-- [ ] **Phase 21 — Polish and tests**
+- [x] **Phase 21 — Polish and tests**
   - Check all states and animations.
   - Performance: small Cloudinary transforms, fewer rebuilds and reads.
   - Unit and widget tests.
@@ -101,6 +101,8 @@ Format: `- [ ] (Phase X) What to do — where — why`
 - [ ] (Phase 19, from time to time) Read reports — Firebase console → Firestore Database → `reports` — nobody reviews them inside the app.
 - [ ] (Phase 20) Deploy the tightened rules: `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — the security-review fixes only protect the database once deployed. If the deploy prints an error (the rules can't be test-compiled on this PC), nothing changes on the server — paste the error to Claude.
 - [ ] (Phase 20, only when you decide to publish) Follow docs/PUBLISHING.md and the "Checklist before publishing" in docs/SECURITY_REVIEW.md. Nothing is deployed until then.
+- [ ] (Phase 21) Deploy the new "my uploads" index: `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — until it's built, Studio and You → Your videos show an error. (Same command as above; covers everything.)
+- [ ] (Phase 21) Go through docs/TEST_CHECKLIST.md in Chrome (2 accounts + a guest) and tell Claude which steps fail.
 
 ## Progress log
 
@@ -376,3 +378,29 @@ Newest entry at the bottom.
   Files: firestore.rules, lib/main.dart, auth_repository.dart, pubspec
   (cupertino_icons), .gitignore, README.md, CLAUDE.md, new
   docs/SECURITY_REVIEW.md + docs/PUBLISHING.md, rules test (143 tests).
+- 2026-10-30 — **Phase 21 (Polish and tests) done — all phases complete.**
+  Performance: the shared video list (`allVideosProvider`) used to read
+  EVERY video, live; it's now capped at the newest 200 (the "catalog").
+  History, Liked, Watch later, playlists and the play queue look up older
+  videos by id (30 per query, once per session — `videoLookupProvider`);
+  Studio / Your videos have their own "my uploads" query (new index), so
+  old uploads are never missing. Thumbnails ask Cloudinary for a copy about
+  the size they're shown (160 / 320 / 480 / 720 / 1080 px, `q_auto`, and
+  `f_auto` for pictures), falling back to the original if refused — much
+  smaller downloads. Fewer rebuilds: recommendations / Up next / Home no
+  longer rebuild every 10 s while a video plays (history position saves);
+  they only follow WHICH videos are in the history. Playlist drag order
+  isn't reset by live view-count updates. States check: every screen that
+  loads data has loading / empty / error states (forms and menus report
+  problems inline). Tests: test/polish_test.dart (thumbnail sizing, lookups,
+  the 10-second rebuild fix, formatting, EmptyState / CategoryChip /
+  NetworkThumbnail widgets) → 159 tests. Full manual checklist:
+  docs/TEST_CHECKLIST.md (features, states, animations, performance).
+  Files: video_repository (cap, getVideosByIds, watchUploadsBy), new
+  video_lookup.dart, you_providers, playlist_screen, play_queue,
+  playlist_panel, hidden_content (watchedIdsKey), cloudinary_urls
+  (sizedThumbnailUrl), network_thumbnail, firestore.indexes.json (14),
+  README, docs/TEST_CHECKLIST.md.
+  Known limits: playlist / You cards show a grey box (not the thumbnail)
+  for a playlist whose first videos are older than the newest 200; Shorts,
+  recommendations and search suggestions only use the newest 200 videos.

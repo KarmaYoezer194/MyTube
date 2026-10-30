@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/video.dart';
-import '../../data/repositories/video_repository.dart';
+import '../../data/repositories/video_lookup.dart';
 import '../mini_player/player_panel_provider.dart';
 import '../watch/watch_providers.dart';
 
@@ -104,8 +104,9 @@ bool playPlaylist(
 final nextVideoProvider = Provider.family<Video?, String>((ref, videoId) {
   final queue = ref.watch(playQueueProvider);
   if (queue != null && queue.contains(videoId)) {
-    final videos = ref.watch(allVideosProvider).value ?? const <Video>[];
-    final byId = {for (final video in videos) video.id: video};
+    final byId =
+        ref.watch(videoLookupProvider(idsKeyOf(queue.videoIds))).value ??
+        const <String, Video>{};
     // Skip videos that were deleted since the playlist started.
     var nextId = nextInQueue(queue.videoIds, videoId);
     while (nextId != null) {

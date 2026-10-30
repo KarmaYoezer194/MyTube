@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,7 +14,7 @@ import '../../data/models/video.dart';
 import '../../data/repositories/channel_repository.dart';
 import '../../data/repositories/playlist_repository.dart';
 import '../../data/repositories/user_repository.dart';
-import '../../data/repositories/video_repository.dart';
+import '../../data/repositories/video_lookup.dart';
 import '../home/widgets/video_options_sheet.dart';
 import 'play_queue.dart';
 import 'playlist_dialogs.dart';
@@ -28,7 +29,6 @@ class PlaylistScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final videosAsync = ref.watch(allVideosProvider);
     final userRepository = ref.read(userRepositoryProvider);
 
     // The built-in lists: always mine, private, not reorderable.
@@ -38,9 +38,8 @@ class PlaylistScreen extends ConsumerWidget {
         liked ? likedVideoIdsProvider : watchLaterIdsProvider,
       );
       return _withVideos(
-        context,
+        ref,
         ids: ids,
-        videosAsync: videosAsync,
         build: (videos) => _PlaylistPage(
           playlistId: playlistId,
           title: liked ? 'Liked videos' : 'Watch later',
@@ -77,9 +76,8 @@ class PlaylistScreen extends ConsumerWidget {
     final repository = ref.read(playlistRepositoryProvider);
 
     return _withVideos(
-      context,
+      ref,
       ids: AsyncData(playlist.videoIds),
-      videosAsync: videosAsync,
       build: (videos) => _PlaylistPage(
         playlistId: playlist.id,
         title: playlist.title,
@@ -113,21 +111,26 @@ class PlaylistScreen extends ConsumerWidget {
   }
 
   /// Turns the playlist's video ids into videos (in order; deleted videos
-  /// are skipped), with loading / error pages.
+  /// are skipped), with loading / error pages. Videos older than the
+  /// catalog are looked up by id.
   Widget _withVideos(
-    BuildContext context, {
+    WidgetRef ref, {
     required AsyncValue<List<String>> ids,
-    required AsyncValue<List<Video>> videosAsync,
     required Widget Function(List<Video> videos) build,
   }) {
-    if (ids.hasError || videosAsync.hasError) return const _Unavailable();
+    if (ids.hasError) return const _Unavailable();
     final idList = ids.value;
-    final all = videosAsync.value;
-    if (idList == null || all == null) {
+    final lookup = idList == null
+        ? null
+        : ref.watch(videoLookupProvider(idsKeyOf(idList)));
+    if (lookup != null && lookup.hasError && !lookup.hasValue) {
+      return const _Unavailable();
+    }
+    final byId = lookup?.value;
+    if (idList == null || byId == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    final byId = {for (final video in all) video.id: video};
-    return build([for (final id in idList) ?byId[id]]);
+    return build(videosInOrder(idList, byId));
   }
 }
 
@@ -171,7 +174,13 @@ class _PlaylistPageState extends ConsumerState<_PlaylistPage> {
   @override
   void didUpdateWidget(_PlaylistPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.videos != widget.videos) _order = null;
+    // A new order or other videos came in (not just new view counts).
+    if (!listEquals(
+      [for (final v in oldWidget.videos) v.id],
+      [for (final v in widget.videos) v.id],
+    )) {
+      _order = null;
+    }
   }
 
   List<Video> get _videos => _order ?? widget.videos;

@@ -20,20 +20,24 @@ class VideoRepository {
   CollectionReference<Map<String, dynamic>> get _videos =>
       _db.collection('videos');
 
-  /// All videos and Shorts, newest first. It's a Stream, so the list updates
-  /// by itself when something changes (e.g. a new upload).
-  ///
-  /// We filter (Shorts, categories) in the app instead of in the query,
-  /// because that needs no extra Firestore indexes and the demo has few
-  /// videos.
+  /// How many of the newest videos the app keeps loaded (the "catalog"
+  /// used for Shorts, recommendations, Up next and search suggestions).
+  /// Capped so the cost stays the same however many videos there are;
+  /// older videos are looked up by id when needed ([getVideosByIds]).
+  static const int catalogSize = 200;
+
+  /// The newest [catalogSize] videos and Shorts, live (new uploads, views
+  /// and likes update by themselves).
   Stream<List<Video>> watchAllVideos() {
-    return _videos.orderBy('createdAt', descending: true).snapshots().map((
-      snapshot,
-    ) {
-      final videos = snapshot.docs.map(Video.fromFirestore).toList();
-      _fillMissingKeywords(videos);
-      return videos;
-    });
+    return _videos
+        .orderBy('createdAt', descending: true)
+        .limit(catalogSize)
+        .snapshots()
+        .map((snapshot) {
+          final videos = snapshot.docs.map(Video.fromFirestore).toList();
+          _fillMissingKeywords(videos);
+          return videos;
+        });
   }
 
   /// Videos from before Phase 18 have no search keywords. The first person
@@ -50,6 +54,45 @@ class VideoRepository {
   }
 
   static final _keywordsFilled = <String>{};
+
+  /// Videos already fetched by id this session (older than the catalog).
+  static final _byIdCache = <String, Video?>{};
+
+  /// Videos by id, for lists that may hold videos older than the catalog
+  /// (history, playlists, liked...). One query per 30 ids; each id is only
+  /// fetched once per session. Deleted videos are left out.
+  Future<Map<String, Video>> getVideosByIds(Iterable<String> ids) async {
+    final missing = {
+      for (final id in ids)
+        if (!_byIdCache.containsKey(id)) id,
+    }.toList();
+    for (var i = 0; i < missing.length; i += 30) {
+      final chunk = missing.sublist(
+        i,
+        i + 30 > missing.length ? missing.length : i + 30,
+      );
+      final snapshot = await _videos
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+      for (final id in chunk) {
+        _byIdCache[id] = null; // Deleted unless found below.
+      }
+      for (final doc in snapshot.docs) {
+        _byIdCache[doc.id] = Video.fromFirestore(doc);
+      }
+    }
+    return {for (final id in ids) id: ?_byIdCache[id]};
+  }
+
+  /// My uploads (videos and Shorts, unlisted too), newest first, live.
+  Stream<List<Video>> watchUploadsBy(String uid) {
+    return _videos
+        .where('uploaderUid', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(catalogSize)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map(Video.fromFirestore).toList());
+  }
 
   // ---------------- Page-by-page lists (Discovery) ----------------
 
@@ -143,7 +186,8 @@ final videoRepositoryProvider = Provider<VideoRepository>(
   (ref) => VideoRepository(ref.watch(firestoreProvider)),
 );
 
-/// Live list of every video (long + Shorts), newest first.
+/// The newest [VideoRepository.catalogSize] videos (long + Shorts),
+/// newest first, live. (The name is older than the cap.)
 final allVideosProvider = StreamProvider<List<Video>>(
   (ref) => ref.watch(videoRepositoryProvider).watchAllVideos(),
 );

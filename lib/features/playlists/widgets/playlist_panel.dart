@@ -6,7 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/text_styles.dart';
 import '../../../core/widgets/network_thumbnail.dart';
 import '../../../data/models/video.dart';
-import '../../../data/repositories/video_repository.dart';
+import '../../../data/repositories/video_lookup.dart';
 import '../../mini_player/player_panel_provider.dart';
 import '../play_queue.dart';
 
@@ -31,8 +31,9 @@ class _PlaylistPanelState extends ConsumerState<PlaylistPanel> {
       return const SizedBox.shrink();
     }
     final colors = context.colors;
-    final videos = ref.watch(allVideosProvider).value ?? const <Video>[];
-    final byId = {for (final video in videos) video.id: video};
+    final byId =
+        ref.watch(videoLookupProvider(idsKeyOf(queue.videoIds))).value ??
+        const <String, Video>{};
     final index = queue.indexOf(widget.videoId);
 
     return Padding(

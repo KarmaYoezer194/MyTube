@@ -97,7 +97,8 @@ You need Flutter (stable), Node.js and the Firebase CLI.
 3. **Sample videos** (once): `dart run tool/upload_seed_media.dart`
 4. **Run**: `flutter pub get`, then `flutter run -d chrome`
    (with App Check: add `--dart-define-from-file=app_check.local.json`).
-5. **Check**: `flutter analyze` and `flutter test`.
+5. **Check**: `flutter analyze`, `flutter test`, and the manual
+   checklist in `docs/TEST_CHECKLIST.md`.
 
 On first launch the app writes the sample videos and channels to Firestore.
 

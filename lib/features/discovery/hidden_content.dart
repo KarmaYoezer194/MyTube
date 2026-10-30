@@ -54,11 +54,21 @@ final hiddenChannelsProvider =
       HiddenChannelsController.new,
     );
 
+/// The ids of the videos in my history, as one string. History saves a
+/// new position every 10 s while a video plays; the string stays the same
+/// then, so what depends on it (recommendations, Up next, Home) doesn't
+/// rebuild every 10 s.
+final watchedIdsKeyProvider = Provider<String>((ref) {
+  final history = ref.watch(historyEntriesProvider).value ?? const [];
+  final ids = [for (final entry in history) entry.videoId]..sort();
+  return ids.join(',');
+});
+
 /// My taste, from data the app already has: history, subscriptions and
 /// what I hid. Used for "Recommended for you" and "Up next".
 final tasteProfileProvider = Provider<TasteProfile>((ref) {
-  final history = ref.watch(historyEntriesProvider).value ?? const [];
-  final watchedIds = {for (final entry in history) entry.videoId};
+  final key = ref.watch(watchedIdsKeyProvider);
+  final watchedIds = key.isEmpty ? <String>{} : key.split(',').toSet();
   final videos = ref.watch(allVideosProvider).value ?? const <Video>[];
   return TasteProfile(
     watchedIds: watchedIds,
