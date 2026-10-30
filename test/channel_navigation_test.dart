@@ -31,4 +31,19 @@ void main() {
       expect(channelLocation('/home', 'a b'), '/home/channel/a%20b');
     });
   });
+
+  group('playlist pages', () {
+    test('open inside the current tab too', () {
+      expect(
+        tabPageLocation('/home/channel/x', 'playlist', 'p1'),
+        '/home/playlist/p1',
+      );
+      expect(tabPageLocation('/you', 'playlist', 'p1'), '/you/playlist/p1');
+      expect(tabPageLocation('/shorts', 'playlist', 'p1'), '/home/playlist/p1');
+    });
+
+    test('does nothing when already on that playlist', () {
+      expect(tabPageLocation('/you/playlist/p1', 'playlist', 'p1'), isNull);
+    });
+  });
 }

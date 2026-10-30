@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../data/repositories/video_repository.dart';
 import '../home/widgets/video_card.dart';
+import '../playlists/widgets/playlist_panel.dart';
 import 'watch_providers.dart';
 import 'widgets/watch_details.dart';
 
@@ -28,6 +29,8 @@ class WatchBody extends ConsumerWidget {
         key: ValueKey(videoId),
         padding: EdgeInsets.zero,
         children: [
+          // Only while a playlist is playing (Play all / Shuffle).
+          PlaylistPanel(videoId: videoId),
           WatchDetails(video: video),
           for (final v in upNext) VideoCard(key: ValueKey(v.id), video: v),
         ],

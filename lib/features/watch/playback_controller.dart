@@ -8,6 +8,7 @@ import '../../core/utils/browser_audio.dart';
 import '../../data/repositories/user_repository.dart';
 import '../../data/repositories/video_repository.dart';
 import '../mini_player/player_panel_provider.dart';
+import '../settings/settings_providers.dart';
 
 /// Thrown when a video has no link or the link can't be played.
 class VideoUnavailableException implements Exception {
@@ -147,6 +148,8 @@ class PlaybackController extends AsyncNotifier<VideoPlayerController?> {
     // Saved now, every 10 seconds while playing, and when you leave.
     void saveProgress() {
       if (!controller.value.isInitialized) return;
+      // "Pause watch history" is on: don't add anything.
+      if (ref.read(historyPausedProvider)) return;
       userRepository
           .saveHistory(video.id, controller.value.position.inSeconds)
           .catchError((Object e) => debugPrint('Saving history failed: $e'));

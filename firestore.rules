@@ -1,7 +1,8 @@
 rules_version = '2';
 
 // MyTube security rules (Phase 12: final rules; Phase 13: channels;
-// Phase 14: replies, comment counters, edit, pin and creator heart).
+// Phase 14: replies, comment counters, edit, pin and creator heart;
+// Phase 15: playlists).
 //
 // There is no server (free Spark plan, no Cloud Functions), so the app does
 // the "server" work itself and THESE RULES are what keeps it honest:
@@ -440,6 +441,43 @@ service cloud.firestore {
         request.resource.data.uid == request.auth.uid &&
         getAfter(userDoc(request.auth.uid)).data.handle == handle;
       allow delete: if hasAccount() && resource.data.uid == request.auth.uid;
+    }
+
+    // ================= Playlists =================
+    // playlists/{playlistId}: ownerUid, channelId ('user-{uid}'), title,
+    // visibility ('public' / 'private'), videoIds (in order, up to 200),
+    // createdAt, updatedAt.
+    // Public playlists show on the owner's channel; private ones only to
+    // the owner. (Liked videos and Watch later are not stored here.)
+    match /playlists/{playlistId} {
+      function isPlaylist(d) {
+        return isText(d.title, 1, 150) &&
+          d.visibility in ['public', 'private'] &&
+          d.videoIds is list && d.videoIds.size() <= 200 &&
+          d.updatedAt == request.time;
+      }
+
+      allow read: if signedIn() &&
+        (resource.data.visibility == 'public' ||
+          resource.data.ownerUid == request.auth.uid);
+
+      allow create: if hasAccount() &&
+        request.resource.data.keys().hasOnly(['ownerUid', 'channelId', 'title',
+          'visibility', 'videoIds', 'createdAt', 'updatedAt']) &&
+        request.resource.data.keys().hasAll(['ownerUid', 'channelId', 'title',
+          'visibility', 'videoIds', 'createdAt', 'updatedAt']) &&
+        request.resource.data.ownerUid == request.auth.uid &&
+        request.resource.data.channelId == 'user-' + request.auth.uid &&
+        request.resource.data.createdAt == request.time &&
+        isPlaylist(request.resource.data);
+
+      // The owner renames it, changes Public / Private, adds, removes or
+      // reorders videos (never the owner or the channel).
+      allow update: if isMyAccount(resource.data.ownerUid) &&
+        onlyChanges(['title', 'visibility', 'videoIds', 'updatedAt']) &&
+        isPlaylist(request.resource.data);
+
+      allow delete: if isMyAccount(resource.data.ownerUid);
     }
 
     // ================= Videos =================

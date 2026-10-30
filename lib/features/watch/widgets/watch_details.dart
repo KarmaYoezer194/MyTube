@@ -12,10 +12,12 @@ import '../../../core/widgets/channel_avatar.dart';
 import '../../../core/widgets/subscribe_button.dart';
 import '../../../data/models/video.dart';
 import '../../../data/repositories/channel_repository.dart';
+import '../../../data/repositories/playlist_repository.dart';
 import '../../../data/repositories/user_repository.dart';
 import '../../auth/require_account.dart';
 import '../../channel/channel_navigation.dart';
 import '../../comments/comments_preview_card.dart';
+import '../../playlists/save_to_playlist_sheet.dart';
 import 'description_sheet.dart';
 
 /// Everything between the player and the "Up next" list: title + meta line,
@@ -49,7 +51,12 @@ class WatchDetails extends ConsumerWidget {
 
     // My like/dislike and Watch later state (live from Firestore).
     final reaction = ref.watch(reactionProvider(video.id)).value ?? 0;
-    final saved = ref.watch(isInWatchLaterProvider(video.id)).value ?? false;
+    // "Saved" = in Watch later or in one of my playlists.
+    final saved =
+        (ref.watch(isInWatchLaterProvider(video.id)).value ?? false) ||
+        (ref.watch(myPlaylistsProvider).value ?? const []).any(
+          (playlist) => playlist.contains(video.id),
+        );
 
     // Guests get the "Sign in to …" sheet instead.
     void react(int tapped) {
@@ -57,18 +64,6 @@ class WatchDetails extends ConsumerWidget {
       if (!checkSignedIn(context, ref, reason: reason)) return;
       repository
           .react(videoId: video.id, current: reaction, tapped: tapped)
-          .catchError(showSaveError);
-    }
-
-    void toggleWatchLater() {
-      if (!checkSignedIn(context, ref, reason: SignInReason.save)) return;
-      repository
-          .setWatchLater(video.id, saved: !saved)
-          .then(
-            (_) => showMessage(
-              saved ? 'Removed from Watch later' : 'Saved to Watch later',
-            ),
-          )
           .catchError(showSaveError);
     }
 
@@ -202,7 +197,8 @@ class WatchDetails extends ConsumerWidget {
                 icon: Symbols.bookmark,
                 label: saved ? 'Saved' : 'Save',
                 active: saved,
-                onTap: toggleWatchLater,
+                // "Save video to…": Watch later and my playlists.
+                onTap: () => showSaveToPlaylistSheet(context, ref, video),
               ),
               const SizedBox(width: 8),
               _ActionPill(

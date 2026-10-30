@@ -28,7 +28,7 @@ Claude builds ONE phase when asked, then stops (see CLAUDE.md).
   - commentCount kept up to date.
   - Top / Newest sort with pagination.
 
-- [ ] **Phase 15 — Playlists**
+- [x] **Phase 15 — Playlists**
   - Create, rename, delete, Public/Private.
   - "Save to…" checkbox sheet from ⋮ and the Save button.
   - Drag to reorder, Play all, Shuffle, playlist panel on the watch page.
@@ -93,6 +93,7 @@ Format: `- [ ] (Phase X) What to do — where — why`
 - [ ] (Phase 12) Generate a debug token and paste it (plus the site key) into `app_check.local.json` (git-ignored) — App Check → Apps → ⋮ → Manage debug tokens — §3c.
 - [ ] (Phase 12) Run with `flutter run -d chrome --dart-define-from-file=app_check.local.json`, check "Verified" requests, then click **Enforce** for Cloud Firestore — Firebase console → App Check → APIs — §3d–3e. Only enforce once requests show as verified.
 - [ ] (Phase 14) Deploy the new rules AND the new comments index: `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — without it, posting/replying/deleting comments is refused ("Couldn't post") and the **Top** sort shows "Couldn't load comments" until the index finishes building (a few minutes; Newest works right away).
+- [ ] (Phase 15) Deploy the rules and the 2 new playlist indexes: `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — until then creating playlists fails ("Couldn't create the playlist"), and your playlists / a channel's Playlists tab stay empty or show an error until the indexes finish building (a few minutes). (If you haven't done the Phase 14 deploy yet, this one command covers both.)
 
 ## Progress log
 
@@ -186,3 +187,38 @@ Newest entry at the bottom.
   reopening the sheet or switching Top/Newest); a comment with more than
   400 replies keeps the extra replies in the database (hidden) when
   deleted; old comments keep the old name/handle after a rename.
+- 2026-10-30 — **Phase 15 (Playlists) done.** New `playlists/{id}`
+  collection (owner, channel, title, Public/Private, videoIds in order up
+  to 200): one read to open, one write to add/remove/reorder. Create from
+  You → Playlists **+** or "New playlist" in the Save sheet; rename / change
+  Public-Private / delete from the playlist page's ⋮. "Save video to…"
+  checkbox sheet (Watch later + my playlists + New playlist) from the watch
+  page's Save button (shows "Saved" if the video is in any of them) and a
+  new "Save to playlist" row in every ⋮ menu. Playlist page (also for the
+  built-in Liked videos and Watch later): big thumbnail, owner, "Private ·
+  N videos", Play all, Shuffle, drag handles to reorder (own playlists),
+  ⋮ → Remove (Liked = takes the like back). Play all / Shuffle start a play
+  queue: ⏭ and autoplay follow the playlist, and the watch page shows a
+  playlist panel ("Title · 3 / 12", tap to see the list, ✕ to stop);
+  closing the player ends it. Shorts in a playlist are listed but skipped
+  when playing. Channel → Playlists tab lists that channel's public
+  playlists. History page: grouped by day (Today / Yesterday / weekday /
+  date), search, ⋮ → Remove from watch history, Pause / Turn on, Clear all
+  (deletes in batches of 400). Pause is also in Settings and is saved in
+  this browser (not the account).
+  Files: new lib/data/models/playlist.dart,
+  lib/data/repositories/playlist_repository.dart, lib/features/playlists/
+  (play_queue, playlist_dialogs, playlist_screen, save_to_playlist_sheet,
+  widgets/playlist_panel, widgets/playlist_row), lib/features/you/
+  history_screen.dart + history_groups.dart; changed app_router,
+  compact_video_row (custom tap + extra ⋮ rows), video_options_sheet,
+  channel_navigation (generic tab pages), channel_screen, player_panel
+  (playlist-aware next video), watch_body, watch_details, playback_controller
+  (respects pause), user_repository, you_providers, you_screen,
+  video_list_screen (now just "Your videos"), settings, firestore.rules,
+  firestore.indexes.json. Tests: test/playlist_test.dart,
+  test/history_groups_test.dart, navigation + rules checks (84 tests).
+  Known limits: Liked videos / Watch later can't be reordered (their order
+  is by date); the play queue is a snapshot (videos added to the playlist
+  while it plays join the next time you press Play all); pausing history is
+  per browser.

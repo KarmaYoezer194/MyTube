@@ -6,12 +6,15 @@ import '../../data/repositories/video_repository.dart';
 
 /// A video in a list, with how much of it you watched (0..1), if known.
 class ListedVideo {
-  const ListedVideo(this.video, {this.progress});
+  const ListedVideo(this.video, {this.progress, this.watchedAt});
 
   final Video video;
 
   /// Shows the red bar under the thumbnail (history only).
   final double? progress;
+
+  /// When it was last watched (history only).
+  final DateTime? watchedAt;
 }
 
 /// Combines a list of video ids (e.g. from Watch later) with the live list
@@ -21,6 +24,7 @@ AsyncValue<List<ListedVideo>> _joinWithVideos(
   Ref ref,
   AsyncValue<List<String>> ids, {
   Map<String, double>? progressById,
+  Map<String, DateTime>? watchedAtById,
 }) {
   final videos = ref.watch(allVideosProvider);
   if (ids.hasError) return AsyncError(ids.error!, ids.stackTrace!);
@@ -34,7 +38,11 @@ AsyncValue<List<ListedVideo>> _joinWithVideos(
   return AsyncData([
     for (final id in idList)
       if (byId[id] case final video?)
-        ListedVideo(video, progress: progressById?[id]),
+        ListedVideo(
+          video,
+          progress: progressById?[id],
+          watchedAt: watchedAtById?[id],
+        ),
   ]);
 }
 
@@ -54,6 +62,10 @@ final historyVideosProvider = Provider<AsyncValue<List<ListedVideo>>>((ref) {
     ref,
     entries.whenData((list) => [for (final e in list) e.videoId]),
     progressById: progress,
+    watchedAtById: {
+      for (final e in entries.value ?? const <HistoryEntry>[])
+        e.videoId: e.watchedAt,
+    },
   );
 });
 

@@ -56,6 +56,16 @@ void main() {
     );
   });
 
+  test('playlists: only the owner changes them, private stays private', () {
+    expect(code, contains('match /playlists/{playlistId}'));
+    expect(code, contains("resource.data.visibility == 'public'"));
+    expect(code, contains('d.videoIds.size() <= 200'));
+    expect(
+      code,
+      contains("onlyChanges(['title', 'visibility', 'videoIds', 'updatedAt'])"),
+    );
+  });
+
   test('guests can still keep history and add views', () {
     expect(code, contains('match /history/{videoId}'));
     expect(code, contains("onlyChanges(['views'])"));

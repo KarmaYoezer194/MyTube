@@ -195,6 +195,13 @@ class SettingsScreen extends ConsumerWidget {
           ),
 
           sectionTitle('History & privacy'),
+          SwitchListTile(
+            secondary: const Icon(Symbols.history_toggle_off),
+            title: const Text('Pause watch history'),
+            subtitle: const Text("Videos you watch won't be added to History"),
+            value: ref.watch(historyPausedProvider),
+            onChanged: ref.read(historyPausedProvider.notifier).setPaused,
+          ),
           ListTile(
             leading: const Icon(Symbols.delete_sweep),
             title: const Text('Clear watch history'),

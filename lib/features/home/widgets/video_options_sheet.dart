@@ -6,14 +6,31 @@ import '../../../core/utils/share_video.dart';
 import '../../../data/models/video.dart';
 import '../../../data/repositories/user_repository.dart';
 import '../../auth/require_account.dart';
+import '../../playlists/save_to_playlist_sheet.dart';
 import '../home_providers.dart';
 
-/// The ⋮ menu of a video card: Save to Watch later, Share, Not interested.
+/// An extra row at the top of a video's ⋮ menu, e.g. "Remove from watch
+/// history" on the History page. [onTap] runs after the menu closes.
+class VideoMenuAction {
+  const VideoMenuAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+}
+
+/// The ⋮ menu of a video: [extraActions], Save to Watch later, Save to
+/// playlist, Share, Not interested.
 Future<void> showVideoOptionsSheet(
   BuildContext context,
   WidgetRef ref,
-  Video video,
-) {
+  Video video, {
+  List<VideoMenuAction> extraActions = const [],
+}) {
   // Grab these now: after "Not interested" the card disappears, and a
   // removed widget can't use `ref` or `context` any more.
   final messenger = ScaffoldMessenger.of(context);
@@ -34,6 +51,15 @@ Future<void> showVideoOptionsSheet(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          for (final action in extraActions)
+            ListTile(
+              leading: Icon(action.icon),
+              title: Text(action.label),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                action.onTap();
+              },
+            ),
           // Consumer: lets this one row read whether the video is saved.
           // (Its own names rowContext/rowRef: the check below must use the
           // video card's `context`/`ref`, because this menu closes first.)
@@ -68,6 +94,14 @@ Future<void> showVideoOptionsSheet(
                       );
                 },
               );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Symbols.playlist_add),
+            title: const Text('Save to playlist'),
+            onTap: () {
+              Navigator.pop(sheetContext);
+              if (context.mounted) showSaveToPlaylistSheet(context, ref, video);
             },
           ),
           ListTile(

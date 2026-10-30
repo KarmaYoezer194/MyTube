@@ -43,3 +43,21 @@ class AutoplayController extends Notifier<bool> {
 final autoplayProvider = NotifierProvider<AutoplayController, bool>(
   AutoplayController.new,
 );
+
+/// "Pause watch history": while on, videos you watch aren't added to
+/// History (and where you stop isn't saved). Saved in this browser.
+class HistoryPausedController extends Notifier<bool> {
+  static const _key = 'history_paused';
+
+  @override
+  bool build() => ref.watch(sharedPreferencesProvider).getBool(_key) ?? false;
+
+  void setPaused(bool paused) {
+    state = paused;
+    ref.read(sharedPreferencesProvider).setBool(_key, paused);
+  }
+}
+
+final historyPausedProvider = NotifierProvider<HistoryPausedController, bool>(
+  HistoryPausedController.new,
+);

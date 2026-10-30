@@ -11,7 +11,7 @@ import '../../data/models/video.dart';
 import '../../data/repositories/video_repository.dart';
 import '../watch/playback_controller.dart';
 import '../watch/watch_body.dart';
-import '../watch/watch_providers.dart';
+import '../playlists/play_queue.dart';
 import '../watch/widgets/player_progress_bar.dart';
 import '../watch/widgets/video_player_view.dart';
 import 'player_panel_provider.dart';
@@ -123,7 +123,8 @@ class _PlayerPanelState extends ConsumerState<PlayerPanel>
     if (videoId == null) return const SizedBox.shrink();
 
     final video = ref.watch(videoProvider(videoId)).value;
-    final next = ref.watch(upNextProvider(videoId)).firstOrNull;
+    // The next video of the playing playlist, or the first "Up next".
+    final next = ref.watch(nextVideoProvider(videoId));
     final colors = context.colors;
     final topPadding = MediaQuery.paddingOf(context).top;
 

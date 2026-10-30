@@ -14,9 +14,13 @@ import '../../data/models/video.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/user_repository.dart';
 import '../../data/models/channel.dart';
+import '../../data/models/playlist.dart';
+import '../../data/repositories/playlist_repository.dart';
+import '../../data/repositories/video_repository.dart';
 import '../auth/sign_in_screen.dart';
 import '../channel/channel_navigation.dart';
 import '../mini_player/player_panel_provider.dart';
+import '../playlists/playlist_dialogs.dart';
 import '../upload/create_sheet.dart';
 import 'you_providers.dart';
 
@@ -38,6 +42,11 @@ class YouScreen extends ConsumerWidget {
     final liked = ref.watch(likedVideosProvider);
     final watchLater = ref.watch(watchLaterVideosProvider);
     final mine = ref.watch(myVideosProvider);
+    final playlists = ref.watch(myPlaylistsProvider).value ?? const [];
+    final videosById = {
+      for (final v in ref.watch(allVideosProvider).value ?? const <Video>[])
+        v.id: v,
+    };
 
     return Scaffold(
       appBar: AppBar(
@@ -89,7 +98,15 @@ class YouScreen extends ConsumerWidget {
           // Liked videos, Watch later and uploads need an account.
           if (signedIn) ...[
             // ---- Playlists ----
-            const _SectionHeader(title: 'Playlists'),
+            _SectionHeader(
+              title: 'Playlists',
+              onAdd: () async {
+                final id = await createPlaylistFlow(context, ref);
+                if (id != null && context.mounted) {
+                  context.push('/you/playlist/$id');
+                }
+              },
+            ),
             SizedBox(
               height: 150,
               child: ListView(
@@ -99,16 +116,33 @@ class YouScreen extends ConsumerWidget {
                   _PlaylistCard(
                     title: 'Liked videos',
                     icon: Symbols.thumb_up,
-                    items: liked.value,
+                    thumbnailUrl: liked.value?.firstOrNull?.video.thumbnailUrl,
+                    subtitle: _videoCount(liked.value?.length),
                     onTap: () => context.push('/you/liked'),
                   ),
                   const SizedBox(width: 10),
                   _PlaylistCard(
                     title: 'Watch later',
                     icon: Symbols.schedule,
-                    items: watchLater.value,
+                    thumbnailUrl:
+                        watchLater.value?.firstOrNull?.video.thumbnailUrl,
+                    subtitle: _videoCount(watchLater.value?.length),
                     onTap: () => context.push('/you/watch-later'),
                   ),
+                  for (final playlist in playlists) ...[
+                    const SizedBox(width: 10),
+                    _PlaylistCard(
+                      key: ValueKey(playlist.id),
+                      title: playlist.title,
+                      icon: Symbols.playlist_play,
+                      thumbnailUrl: _firstThumbnail(playlist, videosById),
+                      subtitle: playlistSubtitle(
+                        isPrivate: playlist.isPrivate,
+                        count: playlist.videoIds.length,
+                      ),
+                      onTap: () => context.push('/you/playlist/${playlist.id}'),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -304,11 +338,29 @@ class _SignedInHeader extends ConsumerWidget {
   }
 }
 
+/// "3 videos", or '' while loading.
+String _videoCount(int? count) => switch (count) {
+  null => '',
+  1 => '1 video',
+  _ => '$count videos',
+};
+
+/// The thumbnail of the first video in [playlist] that still exists.
+String? _firstThumbnail(Playlist playlist, Map<String, Video> videosById) {
+  for (final id in playlist.videoIds) {
+    if (videosById[id] case final video?) return video.thumbnailUrl;
+  }
+  return null;
+}
+
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, this.onViewAll});
+  const _SectionHeader({required this.title, this.onViewAll, this.onAdd});
 
   final String title;
   final VoidCallback? onViewAll;
+
+  /// Shows a + button (e.g. "New playlist").
+  final VoidCallback? onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -326,6 +378,12 @@ class _SectionHeader extends StatelessWidget {
               ),
             ),
           ),
+          if (onAdd != null)
+            IconButton(
+              tooltip: 'New playlist',
+              onPressed: onAdd,
+              icon: Icon(Symbols.add, color: colors.textPrimary),
+            ),
           if (onViewAll != null)
             OutlinedButton(
               onPressed: onViewAll,
@@ -416,26 +474,27 @@ class _HistoryCard extends ConsumerWidget {
   }
 }
 
-/// "Liked videos" / "Watch later" card: first video's thumbnail (or an
-/// icon), the name and how many videos it has.
+/// A playlist card (Liked videos, Watch later or one of mine): first
+/// video's thumbnail (or a grey box), the name and a subtitle.
 class _PlaylistCard extends StatelessWidget {
   const _PlaylistCard({
+    super.key,
     required this.title,
     required this.icon,
-    required this.items,
+    required this.thumbnailUrl,
+    required this.subtitle,
     required this.onTap,
   });
 
   final String title;
   final IconData icon;
-  final List<ListedVideo>? items;
+  final String? thumbnailUrl;
+  final String subtitle;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final first = items?.firstOrNull?.video;
-    final count = items?.length;
 
     return GestureDetector(
       onTap: onTap,
@@ -451,8 +510,8 @@ class _PlaylistCard extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    if (first != null)
-                      NetworkThumbnail(url: first.thumbnailUrl)
+                    if (thumbnailUrl != null)
+                      NetworkThumbnail(url: thumbnailUrl!)
                     else
                       ColoredBox(color: colors.surface),
                     // Dark strip with the icon, like YouTube's playlist cards.
@@ -472,17 +531,17 @@ class _PlaylistCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: AppTextStyles.videoTitle.copyWith(
                 fontSize: 13,
                 color: colors.textPrimary,
               ),
             ),
             Text(
-              count == null
-                  ? ''
-                  : count == 1
-                  ? '1 video'
-                  : '$count videos',
+              subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: AppTextStyles.meta.copyWith(color: colors.textSecondary),
             ),
           ],

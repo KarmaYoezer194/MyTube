@@ -20,12 +20,25 @@ import 'skeleton.dart';
 ///
 /// Tapping a video opens the player; tapping a Short opens the Shorts tab.
 class CompactVideoRow extends ConsumerWidget {
-  const CompactVideoRow({super.key, required this.video, this.progress});
+  const CompactVideoRow({
+    super.key,
+    required this.video,
+    this.progress,
+    this.onTap,
+    this.menuActions = const [],
+  });
 
   final Video video;
 
   /// 0..1: how much you watched. Shows a red bar under the thumbnail.
   final double? progress;
+
+  /// Instead of just opening the video (e.g. play it as part of a
+  /// playlist). Shorts always open in the Shorts tab.
+  final VoidCallback? onTap;
+
+  /// Extra rows at the top of the ⋮ menu (e.g. "Remove from playlist").
+  final List<VideoMenuAction> menuActions;
 
   static const double thumbWidth = 160;
   static const double thumbHeight = 90;
@@ -33,6 +46,8 @@ class CompactVideoRow extends ConsumerWidget {
   void _open(BuildContext context, WidgetRef ref) {
     if (video.isShort) {
       context.go('/shorts?v=${video.id}');
+    } else if (onTap != null) {
+      onTap!();
     } else {
       ref.read(playerPanelProvider.notifier).open(video.id);
     }
@@ -118,7 +133,12 @@ class CompactVideoRow extends ConsumerWidget {
               tooltip: 'More actions',
               visualDensity: VisualDensity.compact,
               icon: const Icon(Symbols.more_vert, size: 20),
-              onPressed: () => showVideoOptionsSheet(context, ref, video),
+              onPressed: () => showVideoOptionsSheet(
+                context,
+                ref,
+                video,
+                extraActions: menuActions,
+              ),
             ),
           ],
         ),

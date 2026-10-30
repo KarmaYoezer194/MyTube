@@ -224,19 +224,29 @@ class UserRepository {
                 videoId: doc.id,
                 positionSeconds:
                     (doc.data()['positionSeconds'] as num?)?.toInt() ?? 0,
+                watchedAt: _time(doc.data()['watchedAt']),
               ),
           ],
         );
   }
 
-  /// Deletes my whole watch history (resume positions too).
+  /// Removes one video from my history (and where I stopped in it).
+  Future<void> removeFromHistory(String videoId) =>
+      _me.collection('history').doc(videoId).delete();
+
+  /// Deletes my whole watch history (resume positions too), 400 at a time
+  /// (one batch can hold up to 500 writes).
   Future<void> clearHistory() async {
-    final snapshot = await _me.collection('history').get();
-    final batch = _db.batch();
-    for (final doc in snapshot.docs) {
-      batch.delete(doc.reference);
+    while (true) {
+      final snapshot = await _me.collection('history').limit(400).get();
+      if (snapshot.docs.isEmpty) return;
+      final batch = _db.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+      if (snapshot.docs.length < 400) return;
     }
-    await batch.commit();
   }
 
   // ---------------- Lists for the You tab ----------------
@@ -271,10 +281,17 @@ class UserRepository {
 
 /// One video in my watch history and where I stopped.
 class HistoryEntry {
-  const HistoryEntry({required this.videoId, required this.positionSeconds});
+  const HistoryEntry({
+    required this.videoId,
+    required this.positionSeconds,
+    required this.watchedAt,
+  });
 
   final String videoId;
   final int positionSeconds;
+
+  /// When I last watched it (groups the History page by day).
+  final DateTime watchedAt;
 }
 
 final userRepositoryProvider = Provider<UserRepository>(

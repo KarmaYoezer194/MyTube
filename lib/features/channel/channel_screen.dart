@@ -18,10 +18,13 @@ import '../../data/models/channel.dart';
 import '../../data/models/video.dart';
 import '../../data/repositories/channel_repository.dart';
 import '../../data/repositories/paged_videos.dart';
+import '../../data/repositories/playlist_repository.dart';
 import '../../data/repositories/user_repository.dart';
 import '../../data/repositories/video_repository.dart';
 import '../home/widgets/shorts_shelf.dart';
 import '../home/widgets/video_card.dart';
+import '../playlists/widgets/playlist_row.dart';
+import 'channel_navigation.dart';
 import 'edit_channel_screen.dart';
 
 /// The 5 tabs of a channel page.
@@ -366,12 +369,43 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen>
     ];
   }
 
-  List<Widget> _playlistsTab() => [
-    _emptySliver(
-      'No playlists',
-      message: "This channel doesn't have any public playlists.",
-    ),
-  ];
+  /// The channel's public playlists (private ones never show here, not
+  /// even to their owner: those are on the You tab).
+  List<Widget> _playlistsTab() {
+    final playlists = ref.watch(channelPlaylistsProvider(widget.channelId));
+    return playlists.when(
+      loading: () => const [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.all(32),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+        ),
+      ],
+      error: (error, stackTrace) => [
+        _errorSliver(
+          () => ref.invalidate(channelPlaylistsProvider(widget.channelId)),
+        ),
+      ],
+      data: (list) => list.isEmpty
+          ? [
+              _emptySliver(
+                'No playlists',
+                message: "This channel doesn't have any public playlists.",
+              ),
+            ]
+          : [
+              SliverList.builder(
+                itemCount: list.length,
+                itemBuilder: (context, index) => PlaylistRow(
+                  key: ValueKey(list[index].id),
+                  playlist: list[index],
+                  onTap: () => openPlaylist(context, ref, list[index].id),
+                ),
+              ),
+            ],
+    );
+  }
 
   List<Widget> _aboutTab(Channel channel) {
     final colors = context.colors;

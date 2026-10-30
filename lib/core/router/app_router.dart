@@ -4,11 +4,14 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/channel/channel_screen.dart';
 import '../../features/home/home_screen.dart';
+import '../../data/models/playlist.dart';
+import '../../features/playlists/playlist_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
 import '../../features/search/search_screen.dart';
 import '../../features/shorts/shorts_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/subscriptions/subscriptions_screen.dart';
+import '../../features/you/history_screen.dart';
 import '../../features/you/video_list_screen.dart';
 import '../../features/you/you_screen.dart';
 import '../widgets/app_shell.dart';
@@ -47,6 +50,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     builder: (context, state) => const NotificationsScreen(),
                   ),
                   _channelRoute(),
+                  _playlistRoute(),
                 ],
               ),
             ],
@@ -67,7 +71,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/subscriptions',
                 builder: (context, state) => const SubscriptionsScreen(),
-                routes: [_channelRoute()],
+                routes: [_channelRoute(), _playlistRoute()],
               ),
             ],
           ),
@@ -79,29 +83,29 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 routes: [
                   GoRoute(
                     path: 'history',
-                    builder: (context, state) =>
-                        const VideoListScreen(kind: VideoListKind.history),
+                    builder: (context, state) => const HistoryScreen(),
                   ),
+                  // The two built-in playlists.
                   GoRoute(
                     path: 'liked',
                     builder: (context, state) =>
-                        const VideoListScreen(kind: VideoListKind.liked),
+                        const PlaylistScreen(playlistId: Playlist.likedId),
                   ),
                   GoRoute(
                     path: 'watch-later',
                     builder: (context, state) =>
-                        const VideoListScreen(kind: VideoListKind.watchLater),
+                        const PlaylistScreen(playlistId: Playlist.watchLaterId),
                   ),
                   GoRoute(
                     path: 'videos',
-                    builder: (context, state) =>
-                        const VideoListScreen(kind: VideoListKind.yourVideos),
+                    builder: (context, state) => const YourVideosScreen(),
                   ),
                   GoRoute(
                     path: 'settings',
                     builder: (context, state) => const SettingsScreen(),
                   ),
                   _channelRoute(),
+                  _playlistRoute(),
                 ],
               ),
             ],
@@ -121,5 +125,14 @@ GoRoute _channelRoute() => GoRoute(
     // fresh (tabs, scroll position).
     key: ValueKey(state.pathParameters['channelId']),
     channelId: state.pathParameters['channelId'] ?? '',
+  ),
+);
+
+/// `<tab>/playlist/<playlistId>`: a playlist page inside a tab.
+GoRoute _playlistRoute() => GoRoute(
+  path: 'playlist/:playlistId',
+  builder: (context, state) => PlaylistScreen(
+    key: ValueKey(state.pathParameters['playlistId']),
+    playlistId: state.pathParameters['playlistId'] ?? '',
   ),
 );
