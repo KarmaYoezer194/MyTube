@@ -12,7 +12,7 @@ import '../../features/shorts/shorts_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/subscriptions/subscriptions_screen.dart';
 import '../../features/you/history_screen.dart';
-import '../../features/you/video_list_screen.dart';
+import '../../features/studio/studio_screen.dart';
 import '../../features/you/you_screen.dart';
 import '../widgets/app_shell.dart';
 
@@ -96,9 +96,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     builder: (context, state) =>
                         const PlaylistScreen(playlistId: Playlist.watchLaterId),
                   ),
+                  // Studio: my uploads and their numbers.
                   GoRoute(
-                    path: 'videos',
-                    builder: (context, state) => const YourVideosScreen(),
+                    path: 'studio',
+                    builder: (context, state) => const StudioScreen(),
                   ),
                   GoRoute(
                     path: 'settings',

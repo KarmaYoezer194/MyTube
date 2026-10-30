@@ -152,7 +152,7 @@ class YouScreen extends ConsumerWidget {
             _SectionHeader(
               title: 'Your videos',
               onViewAll: (mine.value?.isNotEmpty ?? false)
-                  ? () => context.push('/you/videos')
+                  ? () => context.push('/you/studio')
                   : null,
             ),
             ...mine.when(
@@ -179,7 +179,14 @@ class YouScreen extends ConsumerWidget {
           ],
           const Divider(height: 32),
 
-          // ---- Settings shortcut ----
+          // ---- Studio + Settings shortcuts ----
+          if (signedIn)
+            ListTile(
+              leading: const Icon(Symbols.monitoring),
+              title: const Text('Studio'),
+              subtitle: const Text('Your videos, their numbers, edit, delete'),
+              onTap: () => context.push('/you/studio'),
+            ),
           ListTile(
             leading: const Icon(Symbols.settings),
             title: const Text('Settings'),

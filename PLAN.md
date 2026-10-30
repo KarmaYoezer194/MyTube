@@ -35,7 +35,7 @@ Claude builds ONE phase when asked, then stops (see CLAUDE.md).
   - Liked and Watch later as built-in playlists.
   - History grouped by day: remove item, clear, pause history, search history.
 
-- [ ] **Phase 16 — Studio**
+- [x] **Phase 16 — Studio**
   - Manage your videos: thumbnail, title, visibility, date, views, likes, comments.
   - Edit fields and thumbnail.
   - Delete removes Firestore data only (the Cloudinary file is deleted manually).
@@ -94,6 +94,7 @@ Format: `- [ ] (Phase X) What to do — where — why`
 - [ ] (Phase 12) Run with `flutter run -d chrome --dart-define-from-file=app_check.local.json`, check "Verified" requests, then click **Enforce** for Cloud Firestore — Firebase console → App Check → APIs — §3d–3e. Only enforce once requests show as verified.
 - [ ] (Phase 14) Deploy the new rules AND the new comments index: `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — without it, posting/replying/deleting comments is refused ("Couldn't post") and the **Top** sort shows "Couldn't load comments" until the index finishes building (a few minutes; Newest works right away).
 - [ ] (Phase 15) Deploy the rules and the 2 new playlist indexes: `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — until then creating playlists fails ("Couldn't create the playlist"), and your playlists / a channel's Playlists tab stay empty or show an error until the indexes finish building (a few minutes). (If you haven't done the Phase 14 deploy yet, this one command covers both.)
+- [ ] (Phase 16, whenever you delete a video in Studio) Delete its file in Cloudinary too — console.cloudinary.com → Media Library → search the name shown in the delete dialog (it has a Copy button) → select → Delete — the app can't do it (that needs the API secret, which must never be in the app), and leftover files use your free storage. No rules deploy is needed for Phase 16.
 
 ## Progress log
 
@@ -222,3 +223,27 @@ Newest entry at the bottom.
   is by date); the play queue is a snapshot (videos added to the playlist
   while it plays join the next time you press Play all); pausing history is
   per browser.
+- 2026-10-30 — **Phase 16 (Studio) done.** You → Studio (also "View all"
+  next to Your videos), route `/you/studio`. Channel dashboard:
+  subscribers, views, likes, comments, number of videos and Shorts, and
+  the top upload. Content list (All / Videos / Shorts; sort Newest / Most
+  viewed / Most liked) with thumbnail, title, Public/Unlisted · date and
+  👁 👍 💬 numbers; ⋮ → Analytics / Edit / Delete. Video analytics page:
+  views, likes, comments, likes per view, views per day, length, rank by
+  views and its share of the channel's views / likes / comments, plus
+  Watch, Edit and Delete. Edit video: title, description, category,
+  Public/Unlisted and a new thumbnail (uploaded to Cloudinary on Save; asks
+  before throwing away changes). Delete removes the Firestore document only
+  and shows the Cloudinary file name(s) to delete by hand (with Copy); it
+  also stops the video if it's playing. All numbers come from data the app
+  already loads, so the Studio costs no extra Firestore reads. No rules
+  changes (the uploader could already edit / delete their videos).
+  Files: new lib/features/studio/ (studio_screen, video_stats_screen,
+  edit_video_screen, delete_video, studio_stats, widgets/stat_tile);
+  changed video_repository (updateDetails, deleteVideo), app_router,
+  you_screen; removed lib/features/you/video_list_screen.dart ("Your
+  videos" page, replaced by the Studio). Tests: test/studio_stats_test.dart
+  (97 tests total).
+  Known limits: a deleted video's comments stay in the database (hidden;
+  only their authors may delete them); dislikes and watch time aren't
+  stored, so they aren't shown; the video file itself can't be replaced.
