@@ -143,8 +143,11 @@ class PlaybackController extends AsyncNotifier<VideoPlayerController?> {
     // You may have tapped another video while this one was loading.
     if (!ref.mounted) return null;
 
-    await controller.setVolume(ref.read(effectiveVolumeProvider));
-    await controller.setPlaybackSpeed(ref.read(playbackSpeedProvider));
+    final volume = ref.read(effectiveVolumeProvider);
+    final speed = ref.read(playbackSpeedProvider);
+    await controller.setVolume(volume);
+    await controller.setPlaybackSpeed(speed);
+    if (!ref.mounted) return null;
     ref.listen(effectiveVolumeProvider, (_, volume) {
       controller.setVolume(volume);
     });
@@ -187,14 +190,20 @@ class PlaybackController extends AsyncNotifier<VideoPlayerController?> {
     if (!ref.mounted) return null;
     if (resumeAt != null && resumeAt > 5 && resumeAt < seconds - 10) {
       await controller.seekTo(Duration(seconds: resumeAt));
+      if (!ref.mounted) return null;
     }
 
     // ---- Watch history ----
     // Saved now, every 10 seconds while playing, and when you leave.
+    // "Pause watch history" is kept in a variable: saveProgress also runs
+    // while this player is being thrown away (onDispose), and Riverpod
+    // doesn't allow reading providers at that moment.
+    var historyPaused = ref.read(historyPausedProvider);
+    ref.listen(historyPausedProvider, (_, paused) => historyPaused = paused);
     void saveProgress() {
       if (!controller.value.isInitialized) return;
       // "Pause watch history" is on: don't add anything.
-      if (ref.read(historyPausedProvider)) return;
+      if (historyPaused) return;
       userRepository
           .saveHistory(video.id, controller.value.position.inSeconds)
           .catchError((Object e) => debugPrint('Saving history failed: $e'));
@@ -210,6 +219,8 @@ class PlaybackController extends AsyncNotifier<VideoPlayerController?> {
     saveProgress();
 
     await controller.play();
+    // You may have tapped ⏭ (or closed the player) while it started.
+    if (!ref.mounted) return null;
 
     // ---- +1 view ----
     ref
