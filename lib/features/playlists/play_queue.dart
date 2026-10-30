@@ -99,8 +99,21 @@ bool playPlaylist(
   return true;
 }
 
+/// The first video in [upNext] not [played] yet in this session, so ⏭
+/// keeps finding new videos instead of bouncing between two that are each
+/// other's best match. When everything was played, it starts over with the
+/// best match.
+Video? pickNextUnplayed(List<Video> upNext, Iterable<String> played) {
+  final seen = played.toSet();
+  for (final video in upNext) {
+    if (!seen.contains(video.id)) return video;
+  }
+  return upNext.firstOrNull;
+}
+
 /// What ⏭ and autoplay play after [videoId]: the next video of the
-/// playlist being played (null at its end), otherwise the first "Up next".
+/// playlist being played (null at its end), otherwise the best "Up next"
+/// that hasn't been played yet in this session.
 final nextVideoProvider = Provider.family<Video?, String>((ref, videoId) {
   final queue = ref.watch(playQueueProvider);
   if (queue != null && queue.contains(videoId)) {
@@ -115,5 +128,7 @@ final nextVideoProvider = Provider.family<Video?, String>((ref, videoId) {
     }
     return null;
   }
-  return ref.watch(upNextProvider(videoId)).firstOrNull;
+  // Videos played since the player opened (the ⏮ list).
+  final played = ref.watch(playerPanelProvider.select((p) => p.previousIds));
+  return pickNextUnplayed(ref.watch(upNextProvider(videoId)), played);
 });

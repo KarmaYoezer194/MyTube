@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mytube/data/models/playlist.dart';
+import 'package:mytube/data/models/video.dart';
 import 'package:mytube/features/playlists/play_queue.dart';
 
 void main() {
@@ -88,6 +89,34 @@ void main() {
       expect(shuffled.first, 'd');
       expect(shuffled.toSet(), ids.toSet());
       expect(shuffled.length, ids.length);
+    });
+
+    test('next video skips what was already played (no A-B-A loop)', () {
+      Video v(String id) => Video(
+        id: id,
+        title: id,
+        description: '',
+        videoUrl: '',
+        thumbnailUrl: '',
+        durationSeconds: 0,
+        channelId: 'c',
+        channelName: 'C',
+        channelAvatarUrl: '',
+        subscriberCount: 0,
+        views: 0,
+        likes: 0,
+        category: 'Other',
+        isShort: false,
+        uploaderUid: 'u',
+        createdAt: DateTime(2026),
+      );
+      final upNext = [v('a'), v('b'), v('c')];
+      expect(pickNextUnplayed(upNext, const [])?.id, 'a');
+      expect(pickNextUnplayed(upNext, const ['a'])?.id, 'b');
+      expect(pickNextUnplayed(upNext, const ['a', 'b'])?.id, 'c');
+      // Everything played: start over with the best match.
+      expect(pickNextUnplayed(upNext, const ['a', 'b', 'c'])?.id, 'a');
+      expect(pickNextUnplayed(const [], const ['a']), isNull);
     });
 
     test('PlayQueue finds videos', () {
