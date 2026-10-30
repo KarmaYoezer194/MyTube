@@ -1,6 +1,7 @@
 rules_version = '2';
 
-// MyTube security rules (Phase 12: final rules; Phase 13: channels).
+// MyTube security rules (Phase 12: final rules; Phase 13: channels;
+// Phase 14: replies, comment counters, edit, pin and creator heart).
 //
 // There is no server (free Spark plan, no Cloud Functions), so the app does
 // the "server" work itself and THESE RULES are what keeps it honest:
@@ -80,6 +81,9 @@ service cloud.firestore {
     function commentDoc(videoId, commentId) {
       return /databases/$(database)/documents/videos/$(videoId)/comments/$(commentId);
     }
+    function replyDoc(videoId, commentId, replyId) {
+      return /databases/$(database)/documents/videos/$(videoId)/comments/$(commentId)/replies/$(replyId);
+    }
     function myReactionDoc(videoId) {
       return /databases/$(database)/documents/users/$(request.auth.uid)/reactions/$(videoId);
     }
@@ -111,6 +115,71 @@ service cloud.firestore {
 
     function myCommentLikeDoc(videoId, commentId) {
       return /databases/$(database)/documents/users/$(request.auth.uid)/commentLikes/$(videoId + '_' + commentId);
+    }
+
+    // ---- Comment counters ----
+    // videos/{id}.commentCount = comments + replies;
+    // comments/{id}.replyCount = replies of that comment.
+    // Older documents have no counter yet: it counts as 0.
+
+    // [actual] is [expected] - or 0, when [expected] would be below 0
+    // (a counter never goes negative).
+    function countIs(expected, actual) {
+      return actual == expected || (expected < 0 && actual == 0);
+    }
+    // The video's comment counter moved by [change] in this batch.
+    function commentCountMovedBy(videoId, change) {
+      return countIs(
+        get(videoDoc(videoId)).data.get('commentCount', 0) + change,
+        getAfter(videoDoc(videoId)).data.get('commentCount', 0));
+    }
+    // A comment's reply counter moved by [change] in this batch.
+    function replyCountMovedBy(videoId, commentId, change) {
+      return countIs(
+        get(commentDoc(videoId, commentId)).data.get('replyCount', 0) + change,
+        getAfter(commentDoc(videoId, commentId)).data.get('replyCount', 0));
+    }
+
+    // A new comment or reply: posted as ME, with my real profile name and
+    // @handle, 0 likes, server time. [keys] are the allowed fields.
+    function isNewCommentByMe(keys) {
+      let d = request.resource.data;
+      let me = get(userDoc(request.auth.uid)).data;
+      return hasAccount() &&
+        d.keys().hasOnly(keys) &&
+        d.uid == request.auth.uid &&
+        d.displayName == me.displayName &&
+        d.handle == me.handle &&
+        (d.avatarUrl == '' || isCloudinaryUrl(d.avatarUrl)) &&
+        isText(d.text, 1, 1000) &&
+        d.likes == 0 &&
+        d.createdAt == request.time;
+    }
+    // The author changes the text (the app then shows "(edited)").
+    function isAuthorEdit() {
+      return isMyAccount(resource.data.uid) &&
+        onlyChanges(['text', 'edited', 'editedAt']) &&
+        isText(request.resource.data.text, 1, 1000) &&
+        request.resource.data.edited == true &&
+        request.resource.data.editedAt == request.time;
+    }
+    // The video's uploader gives (or takes back) a heart.
+    function isCreatorHeart(videoId) {
+      return hasAccount() &&
+        get(videoDoc(videoId)).data.uploaderUid == request.auth.uid &&
+        onlyChanges(['hearted']) &&
+        request.resource.data.hearted is bool;
+    }
+    // Any account likes / unlikes a comment or reply ([id]): +1 / -1,
+    // together with my own commentLikes record.
+    function isCommentLikeChange(videoId, id) {
+      return hasAccount() && onlyChanges(['likes']) &&
+        ((request.resource.data.likes == resource.data.likes + 1 &&
+            !exists(myCommentLikeDoc(videoId, id)) &&
+            existsAfter(myCommentLikeDoc(videoId, id))) ||
+          (request.resource.data.likes == resource.data.likes - 1 &&
+            exists(myCommentLikeDoc(videoId, id)) &&
+            !existsAfter(myCommentLikeDoc(videoId, id))));
     }
 
     // ---- Video likes <-> my reaction ----
@@ -239,27 +308,46 @@ service cloud.firestore {
       }
 
       // ---- Comment likes ----
-      // commentLikes/{videoId}_{commentId}: videoId, commentId, likedAt.
-      // The comment's like counter must go +1 (like) / -1 (unlike) in the
-      // same batch.
+      // commentLikes/{videoId}_{id}: videoId, commentId, likedAt, and for
+      // a reply also parentId (the comment it belongs to; commentId is
+      // then the reply's id). The liked comment's / reply's counter must
+      // go +1 (like) / -1 (unlike) in the same batch.
       match /commentLikes/{likeId} {
         function commentLikesChangeBy(videoId, commentId, change) {
           return getAfter(commentDoc(videoId, commentId)).data.likes ==
             get(commentDoc(videoId, commentId)).data.likes + change;
         }
+        function replyLikesChangeBy(videoId, commentId, replyId, change) {
+          return getAfter(replyDoc(videoId, commentId, replyId)).data.likes ==
+            get(replyDoc(videoId, commentId, replyId)).data.likes + change;
+        }
+        // The liked comment or reply ([like] = the like record).
+        function likedChangeBy(like, change) {
+          return (!('parentId' in like) &&
+              commentLikesChangeBy(like.videoId, like.commentId, change)) ||
+            ('parentId' in like &&
+              replyLikesChangeBy(like.videoId, like.parentId, like.commentId, change));
+        }
+        function likedIsGone(like) {
+          return (!('parentId' in like) &&
+              !exists(commentDoc(like.videoId, like.commentId))) ||
+            ('parentId' in like &&
+              !exists(replyDoc(like.videoId, like.parentId, like.commentId)));
+        }
 
         allow read: if isMe(uid);
         allow create: if isMyAccount(uid) &&
-          request.resource.data.keys().hasOnly(['videoId', 'commentId', 'likedAt']) &&
+          request.resource.data.keys().hasOnly(
+            ['videoId', 'commentId', 'parentId', 'likedAt']) &&
           request.resource.data.videoId is string &&
           request.resource.data.commentId is string &&
+          (!('parentId' in request.resource.data) ||
+            request.resource.data.parentId is string) &&
           likeId == request.resource.data.videoId + '_' + request.resource.data.commentId &&
           request.resource.data.likedAt == request.time &&
-          commentLikesChangeBy(request.resource.data.videoId,
-            request.resource.data.commentId, 1);
+          likedChangeBy(request.resource.data, 1);
         allow delete: if isMyAccount(uid) &&
-          (!exists(commentDoc(resource.data.videoId, resource.data.commentId)) ||
-            commentLikesChangeBy(resource.data.videoId, resource.data.commentId, -1));
+          (likedIsGone(resource.data) || likedChangeBy(resource.data, -1));
       }
     }
 
@@ -358,7 +446,8 @@ service cloud.firestore {
     // videos/{videoId}: title, description, videoUrl, thumbnailUrl,
     // durationSeconds, channelId, channelName, channelAvatarUrl,
     // subscriberCount, views, likes, category, isShort, uploaderUid,
-    // createdAt, visibility (+ sampleKey on the 13 seed videos).
+    // createdAt, visibility, commentCount (+ sampleKey on the 13 seed
+    // videos; lastCommentId / lastReplyId / pinnedCommentId later).
     match /videos/{videoId} {
 
       function isCategory(value) {
@@ -397,7 +486,8 @@ service cloud.firestore {
           d.keys().hasOnly(['title', 'description', 'videoUrl', 'thumbnailUrl',
             'durationSeconds', 'channelId', 'channelName', 'channelAvatarUrl',
             'subscriberCount', 'views', 'likes', 'category', 'isShort',
-            'uploaderUid', 'createdAt', 'visibility', 'channelAvatarColor']) &&
+            'uploaderUid', 'createdAt', 'visibility', 'channelAvatarColor',
+            'commentCount']) &&
           d.uploaderUid == request.auth.uid &&
           d.channelId == 'user-' + request.auth.uid &&
           d.channelName == get(userDoc(request.auth.uid)).data.displayName &&
@@ -411,6 +501,7 @@ service cloud.firestore {
           d.subscriberCount == 0 &&
           d.views == 0 &&
           d.likes == 0 &&
+          (!('commentCount' in d) || d.commentCount == 0) &&
           isCategory(d.category) &&
           d.isShort is bool &&
           isVisibility(d.visibility) &&
@@ -440,6 +531,41 @@ service cloud.firestore {
           isVisibility(d.visibility);
       }
 
+      // The comment counter moves together with the comment or reply that
+      // was added or deleted (named in lastCommentId / lastReplyId):
+      // +1 for a new one, -1 for a deleted reply, and -1 minus its replies
+      // for a deleted comment (its replies go in the same batch).
+      function isCommentCountChange() {
+        let d = request.resource.data;
+        let before = resource.data.get('commentCount', 0);
+        return hasAccount() &&
+          onlyChanges(['commentCount', 'lastCommentId', 'lastReplyId']) &&
+          d.commentCount is int &&
+          d.lastCommentId is string && d.lastReplyId is string &&
+          (
+            // A new comment.
+            (d.lastReplyId == '' && d.commentCount == before + 1 &&
+              !exists(commentDoc(videoId, d.lastCommentId)) &&
+              existsAfter(commentDoc(videoId, d.lastCommentId))) ||
+            // A new reply.
+            (d.lastReplyId != '' && d.commentCount == before + 1 &&
+              !exists(replyDoc(videoId, d.lastCommentId, d.lastReplyId)) &&
+              existsAfter(replyDoc(videoId, d.lastCommentId, d.lastReplyId))) ||
+            // A deleted comment (with its replies).
+            (d.lastReplyId == '' &&
+              exists(commentDoc(videoId, d.lastCommentId)) &&
+              !existsAfter(commentDoc(videoId, d.lastCommentId)) &&
+              countIs(before - 1 -
+                get(commentDoc(videoId, d.lastCommentId)).data.get('replyCount', 0),
+                d.commentCount)) ||
+            // A deleted reply.
+            (d.lastReplyId != '' &&
+              exists(replyDoc(videoId, d.lastCommentId, d.lastReplyId)) &&
+              !existsAfter(replyDoc(videoId, d.lastCommentId, d.lastReplyId)) &&
+              countIs(before - 1, d.commentCount))
+          );
+      }
+
       allow read: if signedIn();
 
       allow create: if isSeedCreate() || isUploadCreate();
@@ -459,47 +585,91 @@ service cloud.firestore {
           ((request.resource.data.likes == resource.data.likes + 1 &&
               !likedBefore(videoId) && likedAfter(videoId)) ||
             (request.resource.data.likes == resource.data.likes - 1 &&
-              likedBefore(videoId) && !likedAfter(videoId))));
+              likedBefore(videoId) && !likedAfter(videoId)))) ||
+        // Comments / replies added or deleted (accounts only).
+        isCommentCountChange() ||
+        // Videos from before Phase 14 have no comment counter: the first
+        // person to open one counts the comments and fills it in, once.
+        (signedIn() && onlyChanges(['commentCount']) &&
+          !('commentCount' in resource.data) &&
+          request.resource.data.commentCount is int &&
+          request.resource.data.commentCount >= 0 &&
+          request.resource.data.commentCount <= 100000) ||
+        // The uploader pins one comment to the top ('' = none).
+        (isMyAccount(resource.data.uploaderUid) &&
+          onlyChanges(['pinnedCommentId']) &&
+          request.resource.data.pinnedCommentId is string &&
+          (request.resource.data.pinnedCommentId == '' ||
+            exists(commentDoc(videoId, request.resource.data.pinnedCommentId))));
 
       allow delete: if isMyAccount(resource.data.uploaderUid);
 
       // ================= Comments =================
       // comments/{commentId}: uid, displayName, handle, avatarUrl, text,
-      // likes, createdAt.
+      // likes, replyCount, createdAt (+ edited, editedAt, hearted,
+      // lastReplyId later).
       match /comments/{commentId} {
         allow read: if signedIn();
 
-        // Posted as ME, with my real profile name and @handle, 0 likes,
-        // server time.
-        allow create: if hasAccount() &&
-          request.resource.data.keys().hasOnly(
-            ['uid', 'displayName', 'handle', 'avatarUrl', 'text', 'likes', 'createdAt']) &&
-          request.resource.data.uid == request.auth.uid &&
-          request.resource.data.displayName ==
-            get(userDoc(request.auth.uid)).data.displayName &&
-          request.resource.data.handle ==
-            get(userDoc(request.auth.uid)).data.handle &&
-          (request.resource.data.avatarUrl == '' ||
-            isCloudinaryUrl(request.resource.data.avatarUrl)) &&
-          isText(request.resource.data.text, 1, 1000) &&
-          request.resource.data.likes == 0 &&
-          request.resource.data.createdAt == request.time;
+        // A new comment: the video's counter goes +1 in the same batch.
+        allow create: if isNewCommentByMe(
+            ['uid', 'displayName', 'handle', 'avatarUrl', 'text', 'likes',
+              'replyCount', 'createdAt']) &&
+          (!('replyCount' in request.resource.data) ||
+            request.resource.data.replyCount == 0) &&
+          commentCountMovedBy(videoId, 1);
 
-        allow update: if
-          // The author edits the text.
-          (isMyAccount(resource.data.uid) && onlyChanges(['text']) &&
-            isText(request.resource.data.text, 1, 1000)) ||
-          // Any account likes / unlikes: +1 / -1 together with my own
-          // commentLikes record.
-          (hasAccount() && onlyChanges(['likes']) &&
-            ((request.resource.data.likes == resource.data.likes + 1 &&
-                !exists(myCommentLikeDoc(videoId, commentId)) &&
-                existsAfter(myCommentLikeDoc(videoId, commentId))) ||
-              (request.resource.data.likes == resource.data.likes - 1 &&
-                exists(myCommentLikeDoc(videoId, commentId)) &&
-                !existsAfter(myCommentLikeDoc(videoId, commentId)))));
+        allow update: if isAuthorEdit() ||
+          isCommentLikeChange(videoId, commentId) ||
+          isCreatorHeart(videoId) ||
+          // A reply was added / deleted: replyCount +1 / -1 together with it.
+          (hasAccount() && onlyChanges(['replyCount', 'lastReplyId']) &&
+            request.resource.data.lastReplyId is string &&
+            ((request.resource.data.replyCount ==
+                  resource.data.get('replyCount', 0) + 1 &&
+                !exists(replyDoc(videoId, commentId, request.resource.data.lastReplyId)) &&
+                existsAfter(replyDoc(videoId, commentId, request.resource.data.lastReplyId))) ||
+              (countIs(resource.data.get('replyCount', 0) - 1,
+                  request.resource.data.replyCount) &&
+                exists(replyDoc(videoId, commentId, request.resource.data.lastReplyId)) &&
+                !existsAfter(replyDoc(videoId, commentId, request.resource.data.lastReplyId)))));
 
-        allow delete: if isMyAccount(resource.data.uid);
+        // The author deletes it (its replies go in the same batch); the
+        // video's counter goes down by 1 + its replies.
+        allow delete: if isMyAccount(resource.data.uid) &&
+          commentCountMovedBy(videoId, -1 - resource.data.get('replyCount', 0));
+
+        // ================= Replies =================
+        // replies/{replyId}: uid, displayName, handle, avatarUrl, text,
+        // likes, createdAt (+ edited, editedAt, hearted later).
+        // One level deep: replies have no replies of their own.
+        match /replies/{replyId} {
+          allow read: if signedIn();
+
+          // A new reply to an existing comment: the comment's replyCount
+          // and the video's commentCount go +1 in the same batch.
+          allow create: if isNewCommentByMe(
+              ['uid', 'displayName', 'handle', 'avatarUrl', 'text', 'likes',
+                'createdAt']) &&
+            exists(commentDoc(videoId, commentId)) &&
+            replyCountMovedBy(videoId, commentId, 1) &&
+            commentCountMovedBy(videoId, 1);
+
+          allow update: if isAuthorEdit() ||
+            isCommentLikeChange(videoId, replyId) ||
+            isCreatorHeart(videoId);
+
+          allow delete: if
+            // The author deletes their reply: both counters go -1.
+            (isMyAccount(resource.data.uid) &&
+              replyCountMovedBy(videoId, commentId, -1) &&
+              commentCountMovedBy(videoId, -1)) ||
+            // The comment's author deletes the comment, and its replies
+            // with it (in the same batch).
+            (hasAccount() &&
+              !existsAfter(commentDoc(videoId, commentId)) &&
+              get(commentDoc(videoId, commentId)).data.uid == request.auth.uid);
+        }
       }
     }
   }

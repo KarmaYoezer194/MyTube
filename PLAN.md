@@ -1,8 +1,7 @@
 # MyTube — remaining phases
 
 Phases 1–11 are done (core app, Shorts, upload, sign-in).
-Claude works through this list automatically (see CLAUDE.md) and stops at
-each 🛑 checkpoint.
+Claude builds ONE phase when asked, then stops (see CLAUDE.md).
 
 ## Phases
 
@@ -23,7 +22,7 @@ each 🛑 checkpoint.
 
 
 
-- [ ] **Phase 14 — Comments**
+- [x] **Phase 14 — Comments**
   - Replies with an "X replies" expander, likes, edit/delete own, "(edited)".
   - Video owner can pin one comment and give a creator heart.
   - commentCount kept up to date.
@@ -93,6 +92,7 @@ Format: `- [ ] (Phase X) What to do — where — why`
 - [ ] (Phase 12) Register the web app in App Check with the reCAPTCHA **secret** key — Firebase console → App Check → Apps — §3b.
 - [ ] (Phase 12) Generate a debug token and paste it (plus the site key) into `app_check.local.json` (git-ignored) — App Check → Apps → ⋮ → Manage debug tokens — §3c.
 - [ ] (Phase 12) Run with `flutter run -d chrome --dart-define-from-file=app_check.local.json`, check "Verified" requests, then click **Enforce** for Cloud Firestore — Firebase console → App Check → APIs — §3d–3e. Only enforce once requests show as verified.
+- [ ] (Phase 14) Deploy the new rules AND the new comments index: `firebase deploy --only firestore:rules,firestore:indexes` — terminal in `mytube/` — without it, posting/replying/deleting comments is refused ("Couldn't post") and the **Top** sort shows "Couldn't load comments" until the index finishes building (a few minutes; Newest works right away).
 
 ## Progress log
 
@@ -157,3 +157,32 @@ Newest entry at the bottom.
   old uploads without a channel doc; old comments keep the old name/handle
   after a rename; subscriptions made before this phase didn't add +1, so a
   user channel's count can start low (it never goes below 0).
+- 2026-10-30 — **Phase 14 (Comments) done.** Replies live in
+  `videos/{v}/comments/{c}/replies/{r}` (one level deep; replying to a reply
+  adds "@handle " and goes into the same thread). Each comment shows
+  "N replies" (blue) that opens the thread 10 at a time with "Show more
+  replies". Likes work on replies too (like record gets `parentId`). Edit
+  and delete your own comment/reply from the ⋮ menu ("Editing your
+  comment" bar above the box, then "(edited)"); deleting a comment also
+  deletes its replies. The uploader can pin one comment ("Pinned by …",
+  always on top, saved as `videos/{v}.pinnedCommentId`) and give a creator
+  heart (`hearted`). `videos/{v}.commentCount` (comments + replies) and
+  `comments/{c}.replyCount` move in the same batch as the post/delete; the
+  rules check it via `lastCommentId` / `lastReplyId`. Older videos fill in
+  their missing count once (a count query, not a read of every comment).
+  Comments now load 20 at a time (Top = likes then newest, needs the new
+  index; Newest = by date) instead of reading ALL comments live; my own
+  posts/edits/likes/deletes show at once. The watch-page card reads only
+  the pinned/top comment; Shorts use `commentCount`.
+  Files: lib/data/models/comment.dart, video.dart,
+  lib/data/repositories/comment_repository.dart, paged_comments.dart (new),
+  lib/features/comments/comments_sheet.dart, comments_preview_card.dart,
+  widgets/comment_tile.dart (new), lib/features/watch/widgets/watch_details.dart,
+  lib/features/shorts/widgets/short_page.dart, lib/data/seed/seed_videos.dart,
+  firestore.rules, firestore.indexes.json, CLAUDE.md (one phase at a time).
+  Tests: test/comment_test.dart, test/comment_tile_test.dart, rules checks
+  (59 tests total).
+  Known limits: the list isn't live (other people's new comments show after
+  reopening the sheet or switching Top/Newest); a comment with more than
+  400 replies keeps the extra replies in the database (hidden) when
+  deleted; old comments keep the old name/handle after a rename.

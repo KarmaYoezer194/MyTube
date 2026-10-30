@@ -26,6 +26,8 @@ class Video {
     required this.createdAt,
     this.visibility = 'public',
     this.channelAvatarColor,
+    this.commentCount,
+    this.pinnedCommentId = '',
   });
 
   final String id;
@@ -66,6 +68,13 @@ class Video {
   /// 'public' or 'unlisted'. Unlisted videos don't appear on Home.
   final String visibility;
 
+  /// Number of comments + replies. null on older videos that don't have
+  /// the counter yet (the app fills it in once, see CommentRepository).
+  final int? commentCount;
+
+  /// The comment the uploader pinned to the top, or '' for none.
+  final String pinnedCommentId;
+
   Duration get duration => Duration(seconds: durationSeconds);
 
   bool get isUnlisted => visibility == 'unlisted';
@@ -102,6 +111,8 @@ class Video {
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       visibility: data['visibility'] as String? ?? 'public',
       channelAvatarColor: (data['channelAvatarColor'] as num?)?.toInt(),
+      commentCount: (data['commentCount'] as num?)?.toInt(),
+      pinnedCommentId: data['pinnedCommentId'] as String? ?? '',
     );
   }
 
@@ -126,6 +137,8 @@ class Video {
       'createdAt': Timestamp.fromDate(createdAt),
       'visibility': visibility,
       'channelAvatarColor': ?channelAvatarColor,
+      // A new video starts with no comments.
+      'commentCount': commentCount ?? 0,
     };
   }
 
@@ -154,6 +167,8 @@ class Video {
       createdAt: createdAt,
       visibility: visibility,
       channelAvatarColor: channelAvatarColor,
+      commentCount: commentCount,
+      pinnedCommentId: pinnedCommentId,
     );
   }
 }

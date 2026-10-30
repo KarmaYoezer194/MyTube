@@ -42,6 +42,20 @@ void main() {
     expect(code, contains('allow delete: if false;'));
   });
 
+  test('comments: replies, counters, edit, pin and heart are checked', () {
+    expect(code, contains('match /replies/{replyId}'));
+    expect(code, contains('function isCommentCountChange()'));
+    expect(code, contains('function countIs(expected, actual)'));
+    expect(code, contains("onlyChanges(['pinnedCommentId'])"));
+    expect(code, contains("onlyChanges(['hearted'])"));
+    expect(code, contains("onlyChanges(['text', 'edited', 'editedAt'])"));
+    // Posting a comment or reply must move the video's counter.
+    expect(
+      RegExp(r'commentCountMovedBy\(videoId, 1\)').allMatches(code).length,
+      2,
+    );
+  });
+
   test('guests can still keep history and add views', () {
     expect(code, contains('match /history/{videoId}'));
     expect(code, contains("onlyChanges(['views'])"));

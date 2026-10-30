@@ -57,6 +57,7 @@ class _SeedVideo {
       'subscriberCount': subscriberCount,
       'views': views,
       'likes': likes,
+      'commentCount': 0,
       'category': category,
       'isShort': isShort,
       'uploaderUid': 'seed',

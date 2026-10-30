@@ -14,7 +14,6 @@ import '../../../core/widgets/subscribe_button.dart';
 import '../../../data/models/video.dart';
 import '../../../data/repositories/channel_repository.dart';
 import '../../../data/seed/seed_videos.dart';
-import '../../../data/repositories/comment_repository.dart';
 import '../../../data/repositories/user_repository.dart';
 import '../../../data/repositories/video_repository.dart';
 import '../../auth/require_account.dart';
@@ -323,7 +322,8 @@ class _ActionColumn extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final reaction = ref.watch(reactionProvider(video.id)).value ?? 0;
-    final commentCount = ref.watch(commentsProvider(video.id)).value?.length;
+    // Kept on the video itself, so no comments need to be read here.
+    final commentCount = video.commentCount;
     final messenger = ScaffoldMessenger.of(context);
 
     void showMessage(String text) {

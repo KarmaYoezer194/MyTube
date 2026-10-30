@@ -53,11 +53,13 @@ flutter build web
 A phase is only "done" when `flutter analyze` reports no issues and every
 command exits successfully.
 
-## Automatic workflow
-Work through `PLAN.md` phase by phase **without waiting for the user**.
+## Workflow: one phase at a time
+The user does NOT want automation (decided 2026-10-30). Only build the
+phase the user asks for, then stop.
 
-For each phase:
-1. Read the phase in PLAN.md. If it says "SPEC NEEDED", stop and ask.
+For that phase:
+1. Read the phase in PLAN.md. If it says "SPEC NEEDED" or something is
+   unclear in a way that changes the result, ask first.
 2. Build it with complete code (no TODO placeholders). Update
    `firestore.rules` and `firestore.indexes.json` when the data model changes.
 3. Add tests for the new logic under `test/` (pure Dart unit tests for
@@ -66,24 +68,14 @@ For each phase:
 4. Run all verify commands and fix every error and analyzer issue.
 5. Make one Git commit named `Phase X: <short summary>`, staging only the
    files for that phase.
-6. In PLAN.md: tick the phase, add a Progress log entry (date, what was
-   built, files touched, tests added, anything skipped), and add any
-   Firebase/Cloudinary console steps to "Manual steps for me".
-7. Continue straight to the next phase.
+6. In PLAN.md: tick the phase, add a Progress log entry, and add any
+   Firebase/Cloudinary console or deploy steps to "Manual steps for me".
+7. **STOP.** Tell the user which files changed, the manual steps, and how
+   to test it in Chrome. Wait until they ask for the next phase.
 
-Console and deploy steps never block work. Write them down under
-"Manual steps for me" and keep going.
-
-### Stop and wait for the user ONLY when:
-- You reach a **checkpoint** in PLAN.md. Then give a short summary of what
-  was built, the Chrome test steps for those phases, and the current
-  manual-steps list.
-- A decision is **hard to undo** (deleting user data, changing the Firestore
-  data shape in a way that breaks existing docs, rewriting git history).
-- Anything **costs money** or needs a paid plan or a billing account.
-- The **same error still fails after 3 different fix attempts.** Then
-  explain the error in 1–2 sentences and what you tried.
-- A phase has no spec, or the spec is unclear in a way that changes the result.
+Also stop and ask before anything hard to undo or that costs money, and
+when the same error still fails after 3 different fix attempts (explain it
+in 1–2 sentences and what you tried).
 
 ### Writing for the user
 The user is a student. Keep summaries short and simple, give exact file

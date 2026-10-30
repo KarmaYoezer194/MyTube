@@ -218,7 +218,7 @@ class WatchDetails extends ConsumerWidget {
         // ---- Comments card (tap = comments sheet) ----
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-          child: CommentsPreviewCard(videoId: video.id),
+          child: CommentsPreviewCard(video: video),
         ),
       ],
     );
